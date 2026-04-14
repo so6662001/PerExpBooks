@@ -6,13 +6,16 @@ import com.qiankubx.common.exception.BizException;
 import com.qiankubx.common.response.ResultCode;
 import com.qiankubx.module.expense.dto.ExpenseVO;
 import com.qiankubx.module.expense.entity.Expense;
+import com.qiankubx.common.security.DataSignService;
 import com.qiankubx.module.expense.mapper.ExpenseMapper;
+import com.qiankubx.module.expense.service.ExpenseService;
 import com.qiankubx.module.reimbursement.dto.*;
 import com.qiankubx.module.reimbursement.entity.Reimbursement;
 import com.qiankubx.module.reimbursement.mapper.ReimbursementMapper;
 import com.qiankubx.module.user.entity.User;
 import com.qiankubx.module.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +39,8 @@ public class ReimbursementService {
     private final PdfMergeService pdfMergeService;
     private final ZipPackageService zipPackageService;
     private final EmailSendService emailSendService;
+    private final @Lazy DataSignService dataSignService;
+    private final @Lazy ExpenseService expenseService;
 
     @Transactional(rollbackFor = Exception.class)
     public ReimbursementVO generate(Long userId, ReimbursementCreateDTO dto) {
@@ -149,6 +154,18 @@ public class ReimbursementService {
         reimbursement.setReceivedAt(LocalDateTime.now());
         reimbursement.setUpdatedAt(LocalDateTime.now());
         reimbursementMapper.updateById(reimbursement);
+
+        List<Expense> relatedExpenses = expenseMapper.selectList(
+                new LambdaQueryWrapper<Expense>()
+                        .eq(Expense::getReimbursementId, reimbursement.getId())
+                        .eq(Expense::getStatus, 0)
+        );
+        for (Expense expense : relatedExpenses) {
+            expense.setReimburseStatus(2);
+            expense.setUpdatedAt(LocalDateTime.now());
+            expense.setDataSign(dataSignService.sign(expenseService.buildSignPayload(expense)));
+            expenseMapper.updateById(expense);
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -289,12 +306,16 @@ public class ReimbursementService {
         if (expenseIds == null || expenseIds.isEmpty()) {
             return;
         }
-        LambdaUpdateWrapper<Expense> updateWrapper = new LambdaUpdateWrapper<>();
-        updateWrapper.in(Expense::getId, expenseIds)
-                .set(Expense::getReimburseStatus, status)
-                .set(Expense::getReimbursementId, reimbursementId)
-                .set(Expense::getUpdatedAt, LocalDateTime.now());
-        expenseMapper.update(null, updateWrapper);
+        List<Expense> expenses = expenseMapper.selectList(
+                new LambdaQueryWrapper<Expense>().in(Expense::getId, expenseIds)
+        );
+        for (Expense expense : expenses) {
+            expense.setReimburseStatus(status);
+            expense.setReimbursementId(reimbursementId);
+            expense.setUpdatedAt(LocalDateTime.now());
+            expense.setDataSign(dataSignService.sign(expenseService.buildSignPayload(expense)));
+            expenseMapper.updateById(expense);
+        }
     }
 
     private List<Expense> getRelatedExpenses(Long reimbursementId) {

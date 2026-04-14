@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { createExpense, listTrips, getCategoryLabel, getCategoryIcon } from '@qianku/shared'
+import { createExpense, listTrips, listCategories } from '@qianku/shared'
 import type { TripVO } from '@qianku/shared'
 
 defineOptions({ name: 'ExpenseAdd' })
@@ -12,20 +12,13 @@ const creating = ref(false)
 const tripsLoading = ref(false)
 const trips = ref<TripVO[]>([])
 
-const categories = [
-  { value: 'transport', label: '交通', icon: '🚗' },
-  { value: 'accommodation', label: '住宿', icon: '🏨' },
-  { value: 'meal', label: '餐饮', icon: '🍽️' },
-  { value: 'office', label: '办公', icon: '📎' },
-  { value: 'communication', label: '通讯', icon: '📱' },
-  { value: 'other', label: '其他', icon: '📋' },
-]
+const categories = ref<{ value: number; label: string; icon: string }[]>([])
 
 const form = ref({
-  category: '',
+  categoryId: undefined as number | undefined,
   amount: undefined as number | undefined,
   expenseDate: '',
-  tripId: '',
+  tripId: undefined as number | undefined,
   description: '',
 })
 
@@ -34,18 +27,18 @@ const showDatePicker = ref(false)
 const showTripPicker = ref(false)
 
 const categoryText = computed(() => {
-  const cat = categories.find(c => c.value === form.value.category)
+  const cat = categories.value.find(c => c.value === form.value.categoryId)
   return cat ? `${cat.icon} ${cat.label}` : ''
 })
 
 const tripText = computed(() => {
   if (!form.value.tripId) return ''
-  const trip = trips.value.find(t => t.id === form.value.tripId)
+  const trip = trips.value.find((t: any) => t.id === form.value.tripId)
   return trip ? `📍 ${trip.destination}` : ''
 })
 
 const canSubmit = computed(() =>
-  form.value.category && form.value.amount && form.value.amount > 0 && form.value.expenseDate,
+  form.value.categoryId && form.value.amount && form.value.amount > 0 && form.value.expenseDate,
 )
 
 const today = new Date()
@@ -57,10 +50,20 @@ const defaultDate = [
 
 onMounted(async () => {
   form.value.expenseDate = defaultDate.join('-')
+  try {
+    const catResult = await listCategories()
+    categories.value = (catResult as any[]).map((c: any) => ({
+      value: c.id,
+      label: c.name,
+      icon: c.icon || '📋',
+    }))
+  } catch {
+    // ignore
+  }
   tripsLoading.value = true
   try {
-    const result = await listTrips({ pageNum: 1, pageSize: 100 })
-    trips.value = result.list
+    const result = await listTrips()
+    trips.value = Array.isArray(result) ? result : []
   } catch {
     // ignore
   } finally {
@@ -69,7 +72,7 @@ onMounted(async () => {
 })
 
 function onCategoryConfirm({ selectedOptions }: any) {
-  form.value.category = selectedOptions[0]?.value || ''
+  form.value.categoryId = selectedOptions[0]?.value || undefined
   showCategoryPicker.value = false
 }
 
@@ -79,12 +82,12 @@ function onDateConfirm({ selectedValues }: any) {
 }
 
 function onTripConfirm({ selectedOptions }: any) {
-  form.value.tripId = selectedOptions[0]?.value || ''
+  form.value.tripId = selectedOptions[0]?.value || undefined
   showTripPicker.value = false
 }
 
 function clearTrip() {
-  form.value.tripId = ''
+  form.value.tripId = undefined
 }
 
 async function handleSubmit() {
@@ -92,7 +95,8 @@ async function handleSubmit() {
   creating.value = true
   try {
     await createExpense({
-      category: form.value.category,
+      categoryId: form.value.categoryId!,
+      type: 1,
       amount: form.value.amount!,
       expenseDate: form.value.expenseDate,
       tripId: form.value.tripId || undefined,
@@ -180,7 +184,7 @@ async function handleSubmit() {
 
     <van-popup v-model:show="showCategoryPicker" position="bottom" round>
       <van-picker
-        :columns="categories.map(c => ({ text: `${c.icon} ${c.label}`, value: c.value }))"
+        :columns="categories.map((c: any) => ({ text: `${c.icon} ${c.label}`, value: c.value }))"
         @confirm="onCategoryConfirm"
         @cancel="showCategoryPicker = false"
       />

@@ -25,7 +25,7 @@
                 <el-descriptions-item label="天数">{{ trip.days }} 天</el-descriptions-item>
                 <el-descriptions-item label="开始日期">{{ trip.startDate }}</el-descriptions-item>
                 <el-descriptions-item label="结束日期">{{ trip.endDate }}</el-descriptions-item>
-                <el-descriptions-item label="事由" :span="2">{{ trip.purpose }}</el-descriptions-item>
+                <el-descriptions-item label="标题" :span="2">{{ trip.title }}</el-descriptions-item>
                 <el-descriptions-item label="备注" :span="2">{{ trip.remark || '-' }}</el-descriptions-item>
               </el-descriptions>
             </el-card>
@@ -41,9 +41,9 @@
               </template>
               <el-table :data="expenses" stripe>
                 <el-table-column prop="expenseDate" label="日期" width="120" />
-                <el-table-column prop="category" label="分类" width="100">
+                <el-table-column prop="categoryName" label="分类" width="100">
                   <template #default="{ row }">
-                    {{ getCategoryLabel(row.category) }}
+                    {{ row.categoryName || '-' }}
                   </template>
                 </el-table-column>
                 <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
@@ -52,10 +52,10 @@
                     {{ formatAmount(row.amount) }}
                   </template>
                 </el-table-column>
-                <el-table-column prop="status" label="状态" width="100">
+                <el-table-column prop="reimburseStatus" label="状态" width="100">
                   <template #default="{ row }">
-                    <el-tag :type="row.status === 'reimbursed' ? 'success' : 'warning'" size="small">
-                      {{ getStatusLabel(row.status) }}
+                    <el-tag :type="row.reimburseStatus === 2 ? 'success' : 'warning'" size="small">
+                      {{ row.reimburseStatus === 0 ? '待报销' : row.reimburseStatus === 1 ? '报销中' : '已报销' }}
                     </el-tag>
                   </template>
                 </el-table-column>
@@ -70,19 +70,12 @@
               </template>
               <div class="summary-items">
                 <div class="summary-item">
-                  <span class="label">总费用</span>
-                  <span class="value">{{ formatAmount(trip.totalExpense) }}</span>
+                  <span class="label">每日补贴</span>
+                  <span class="value">{{ formatAmount(trip.subsidyPerDay) }}</span>
                 </div>
                 <div class="summary-item">
-                  <span class="label">预算</span>
-                  <span class="value">{{ trip.budget ? formatAmount(trip.budget) : '-' }}</span>
-                </div>
-                <div class="summary-item" v-if="trip.budget">
-                  <span class="label">预算使用</span>
-                  <el-progress
-                    :percentage="Math.min(100, Math.round((trip.totalExpense / trip.budget) * 100))"
-                    :color="trip.totalExpense > trip.budget ? '#FF3B30' : '#34C759'"
-                  />
+                  <span class="label">补贴合计</span>
+                  <span class="value">{{ formatAmount(trip.subsidyTotal) }}</span>
                 </div>
                 <div class="summary-item">
                   <span class="label">费用笔数</span>
@@ -110,10 +103,7 @@ import { useRoute } from 'vue-router'
 import * as echarts from 'echarts'
 import {
   getTripDetail,
-  listExpenses,
   formatAmount,
-  getCategoryLabel,
-  getStatusLabel,
   type TripVO,
   type ExpenseVO,
 } from '@qianku/shared'
@@ -125,26 +115,25 @@ const expenses = ref<ExpenseVO[]>([])
 const chartRef = ref<HTMLElement>()
 let chart: echarts.ECharts | null = null
 
-function tripStatusType(status: string) {
-  const map: Record<string, string> = {
-    planned: '',
-    ongoing: 'warning',
-    completed: 'success',
-    cancelled: 'info',
-  }
-  return (map[status] || 'info') as any
+function tripStatusType(status: number) {
+  if (status === 0) return ''
+  if (status === 1) return 'info'
+  return 'info'
+}
+
+function getStatusLabel(status: number) {
+  if (status === 0) return '正常'
+  if (status === 1) return '已删除'
+  return '未知'
 }
 
 async function loadData() {
   const id = route.params.id as string
   loading.value = true
   try {
-    const [tripRes, expenseRes] = await Promise.all([
-      getTripDetail(id),
-      listExpenses({ tripId: id, pageNum: 1, pageSize: 100 }),
-    ])
+    const tripRes = await getTripDetail(id)
     trip.value = tripRes
-    expenses.value = expenseRes.list
+    expenses.value = tripRes.expenses || []
 
     await nextTick()
     renderChart()
@@ -161,7 +150,7 @@ function renderChart() {
 
   const categoryMap: Record<string, number> = {}
   expenses.value.forEach(e => {
-    const label = getCategoryLabel(e.category)
+    const label = e.categoryName || e.description || '其他'
     categoryMap[label] = (categoryMap[label] || 0) + e.amount
   })
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { listTrips, formatAmount, getStatusLabel, getStatusColor, formatDate } from '@qianku/shared'
+import { listTrips, formatAmount, formatDate } from '@qianku/shared'
 import type { TripVO } from '@qianku/shared'
 
 const router = useRouter()
@@ -18,13 +18,14 @@ async function loadData(isRefresh = false) {
   }
   loading.value = true
   try {
-    const result = await listTrips({ pageNum: pageNum.value, pageSize: 20 })
+    const result = await listTrips()
+    const allItems = Array.isArray(result) ? result : (result as any).list || []
     if (isRefresh) {
-      trips.value = result.list
+      trips.value = allItems
     } else {
-      trips.value.push(...result.list)
+      trips.value = allItems
     }
-    if (trips.value.length >= result.total) finished.value = true
+    finished.value = true
     pageNum.value++
   } catch {
     finished.value = true
@@ -64,16 +65,15 @@ onMounted(() => loadData(true))
         >
           <div class="trip-header">
             <span class="trip-dest">📍 {{ trip.destination }}</span>
-            <span class="status-tag" :class="trip.status">
-              {{ getStatusLabel(trip.status) }}
+            <span class="status-tag">
+              {{ trip.title }}
             </span>
           </div>
           <div class="trip-dates">
             {{ formatDate(trip.startDate) }} ~ {{ formatDate(trip.endDate) }} · {{ trip.days }}天
           </div>
-          <div class="trip-purpose">{{ trip.purpose }}</div>
           <div class="trip-footer">
-            <span class="trip-expense">支出 {{ formatAmount(trip.totalExpense) }}</span>
+            <span class="trip-expense">补贴 {{ formatAmount(trip.subsidyTotal) }}</span>
             <span class="trip-count">{{ trip.expenseCount }} 笔费用</span>
           </div>
         </div>

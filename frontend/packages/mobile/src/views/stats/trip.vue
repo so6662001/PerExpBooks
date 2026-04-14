@@ -2,7 +2,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { listTrips, formatAmount, getStatusLabel, formatDate } from '@qianku/shared'
+import { listTrips, formatAmount, formatDate } from '@qianku/shared'
 import type { TripVO } from '@qianku/shared'
 
 defineOptions({ name: 'StatsTrip' })
@@ -36,12 +36,13 @@ async function loadData() {
   try {
     const startDate = `${year.value}-01-01`
     const endDate = `${year.value}-12-31`
-    const result = await listTrips({ pageNum: 1, pageSize: 100, startDate, endDate })
-    trips.value = result.list
+    const result = await listTrips()
+    const allTrips = Array.isArray(result) ? result : (result as any).list || []
+    trips.value = allTrips
 
     totalTrips.value = trips.value.length
-    totalDays.value = trips.value.reduce((sum, t) => sum + t.days, 0)
-    totalExpense.value = trips.value.reduce((sum, t) => sum + t.totalExpense, 0)
+    totalDays.value = trips.value.reduce((sum: number, t: any) => sum + (t.days || 0), 0)
+    totalExpense.value = trips.value.reduce((sum: number, t: any) => sum + (t.subsidyTotal || 0), 0)
   } catch (e: any) {
     showToast(e.message || '加载失败')
   } finally {
@@ -95,15 +96,15 @@ function onYearConfirm({ selectedOptions }: any) {
       <div v-for="trip in trips" :key="trip.id" class="trip-item card">
         <div class="trip-header">
           <span class="trip-dest">📍 {{ trip.destination }}</span>
-          <span class="status-tag" :class="trip.status">
-            {{ getStatusLabel(trip.status) }}
+          <span class="status-tag">
+            {{ trip.title }}
           </span>
         </div>
         <div class="trip-dates">
           {{ formatDate(trip.startDate) }} ~ {{ formatDate(trip.endDate) }} · {{ trip.days }}天
         </div>
         <div class="trip-footer">
-          <span class="trip-expense">支出 {{ formatAmount(trip.totalExpense) }}</span>
+          <span class="trip-expense">补贴 {{ formatAmount(trip.subsidyTotal) }}</span>
           <span class="trip-count">{{ trip.expenseCount }} 笔费用</span>
         </div>
       </div>

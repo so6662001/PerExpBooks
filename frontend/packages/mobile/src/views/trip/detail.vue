@@ -5,10 +5,7 @@ import { showDialog, showToast } from 'vant'
 import {
   getTripDetail,
   deleteTrip,
-  listExpenses,
   formatAmount,
-  getStatusLabel,
-  getCategoryLabel,
   formatDate,
 } from '@qianku/shared'
 import type { TripVO, ExpenseVO } from '@qianku/shared'
@@ -20,20 +17,16 @@ const router = useRouter()
 const trip = ref<TripVO | null>(null)
 const expenses = ref<ExpenseVO[]>([])
 const loading = ref(true)
-const expensesLoading = ref(false)
 
 onMounted(async () => {
   const id = route.params.id as string
   try {
     trip.value = await getTripDetail(id)
-    expensesLoading.value = true
-    const result = await listExpenses({ tripId: id, pageNum: 1, pageSize: 100 })
-    expenses.value = result.list
+    expenses.value = trip.value?.expenses || []
   } catch (e: any) {
     showToast(e.message || '加载失败')
   } finally {
     loading.value = false
-    expensesLoading.value = false
   }
 })
 
@@ -73,8 +66,8 @@ function goExpenseDetail(id: string) {
     <template v-if="trip">
       <div class="trip-header">
         <div class="trip-dest">📍 {{ trip.destination }}</div>
-        <span class="status-tag" :class="trip.status">
-          {{ getStatusLabel(trip.status) }}
+        <span class="status-tag">
+          {{ trip.title }}
         </span>
       </div>
 
@@ -88,16 +81,12 @@ function goExpenseDetail(id: string) {
           <span class="value">{{ trip.days }} 天</span>
         </div>
         <div class="detail-row">
-          <span class="label">出差事由</span>
-          <span class="value">{{ trip.purpose }}</span>
-        </div>
-        <div v-if="trip.budget" class="detail-row">
-          <span class="label">预算</span>
-          <span class="value">{{ formatAmount(trip.budget) }}</span>
+          <span class="label">每日补贴</span>
+          <span class="value">{{ formatAmount(trip.subsidyPerDay) }}</span>
         </div>
         <div class="detail-row">
-          <span class="label">总支出</span>
-          <span class="value highlight">{{ formatAmount(trip.totalExpense) }}</span>
+          <span class="label">补贴合计</span>
+          <span class="value highlight">{{ formatAmount(trip.subsidyTotal) }}</span>
         </div>
         <div v-if="trip.remark" class="detail-row">
           <span class="label">备注</span>
@@ -107,22 +96,20 @@ function goExpenseDetail(id: string) {
 
       <div class="section-title">关联费用 ({{ expenses.length }})</div>
 
-      <van-loading v-if="expensesLoading" class="page-loading" />
-
       <div
         v-for="expense in expenses"
         :key="expense.id"
         class="expense-item card"
-        @click="goExpenseDetail(expense.id)"
+        @click="goExpenseDetail(String(expense.id))"
       >
         <div class="expense-info">
-          <span class="expense-name">{{ getCategoryLabel(expense.category) }}</span>
+          <span class="expense-name">{{ expense.categoryName || expense.description || '费用' }}</span>
           <span class="expense-date">{{ formatDate(expense.expenseDate) }}</span>
         </div>
         <span class="expense-amount amount">{{ formatAmount(expense.amount) }}</span>
       </div>
 
-      <div v-if="expenses.length === 0 && !expensesLoading" class="empty-state">
+      <div v-if="expenses.length === 0" class="empty-state">
         <div class="empty-icon">📭</div>
         <div class="empty-text">暂无关联费用</div>
       </div>

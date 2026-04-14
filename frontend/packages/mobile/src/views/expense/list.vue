@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { listExpenses, formatAmount, getCategoryIcon, getCategoryLabel, getStatusLabel, getStatusColor, formatDate } from '@qianku/shared'
-import type { ExpenseVO, ExpenseStatus } from '@qianku/shared'
+import { listExpenses, formatAmount, formatDate } from '@qianku/shared'
+import type { ExpenseVO } from '@qianku/shared'
 
 defineOptions({ name: 'ExpenseList' })
 
@@ -15,10 +15,17 @@ const refreshing = ref(false)
 const pageNum = ref(1)
 const pageSize = 20
 
+function getReimburseStatusLabel(s: number) {
+  if (s === 0) return '待报销'
+  if (s === 1) return '报销中'
+  if (s === 2) return '已报销'
+  return '未知'
+}
+
 const tabs = [
   { name: 'all', title: '全部' },
-  { name: 'pending', title: '待报销' },
-  { name: 'reimbursed', title: '已报销' },
+  { name: '0', title: '待报销' },
+  { name: '2', title: '已报销' },
 ]
 
 async function loadData(isRefresh = false) {
@@ -28,17 +35,18 @@ async function loadData(isRefresh = false) {
   }
   loading.value = true
   try {
-    const params: any = { pageNum: pageNum.value, pageSize }
+    const params: any = { page: pageNum.value, pageSize }
     if (activeTab.value !== 'all') {
-      params.status = activeTab.value as ExpenseStatus
+      params.reimburseStatus = Number(activeTab.value)
     }
     const result = await listExpenses(params)
+    const list = result.list || (result as any).records || []
     if (isRefresh) {
-      expenses.value = result.list
+      expenses.value = list
     } else {
-      expenses.value.push(...result.list)
+      expenses.value.push(...list)
     }
-    if (expenses.value.length >= result.total) {
+    if (expenses.value.length >= (result.total || 0)) {
       finished.value = true
     }
     pageNum.value++
@@ -68,7 +76,7 @@ function goUpload() {
   router.push('/expense/upload')
 }
 
-function goDetail(id: string) {
+function goDetail(id: number | string) {
   router.push(`/expense/${id}`)
 }
 </script>
@@ -98,17 +106,17 @@ function goDetail(id: string) {
           @click="goDetail(expense.id)"
         >
           <div class="expense-left">
-            <div class="expense-icon">{{ getCategoryIcon(expense.category) }}</div>
+            <div class="expense-icon">📋</div>
           </div>
           <div class="expense-center">
-            <div class="expense-category">{{ getCategoryLabel(expense.category) }}</div>
+            <div class="expense-category">{{ expense.categoryName || expense.description || '费用' }}</div>
             <div class="expense-desc">{{ expense.description || '无备注' }}</div>
             <div class="expense-date">{{ formatDate(expense.expenseDate) }}</div>
           </div>
           <div class="expense-right">
             <div class="expense-amount amount">{{ formatAmount(expense.amount) }}</div>
-            <span class="status-tag" :class="expense.status">
-              {{ getStatusLabel(expense.status) }}
+            <span class="status-tag">
+              {{ getReimburseStatusLabel(expense.reimburseStatus) }}
             </span>
           </div>
         </div>

@@ -6,7 +6,6 @@ import {
   getReimbursementDetail,
   exportReimbursement,
   formatAmount,
-  getCategoryLabel,
   formatDate,
 } from '@qianku/shared'
 import { useUserStore } from '@qianku/shared'
@@ -75,7 +74,7 @@ async function handleExport(type: 'merged_pdf' | 'zip') {
             </div>
             <div class="info-row">
               <span>创建日期：{{ formatDate(detail.createdAt) }}</span>
-              <span>单据编号：{{ detail.id.slice(0, 8).toUpperCase() }}</span>
+              <span>单据编号：{{ detail.reimburseNo || String(detail.id).slice(0, 8).toUpperCase() }}</span>
             </div>
           </div>
 
@@ -91,7 +90,7 @@ async function handleExport(type: 'merged_pdf' | 'zip') {
             <tbody>
               <tr v-for="(expense, index) in detail.expenses" :key="expense.id">
                 <td>{{ index + 1 }}</td>
-                <td>{{ getCategoryLabel(expense.category) }}</td>
+                <td>{{ expense.categoryName || expense.description || '费用' }}</td>
                 <td>{{ formatDate(expense.expenseDate) }}</td>
                 <td class="amount-cell">{{ formatAmount(expense.amount) }}</td>
               </tr>
@@ -108,8 +107,8 @@ async function handleExport(type: 'merged_pdf' | 'zip') {
             <div class="attach-title">附件清单</div>
             <div v-if="detail.expenses.length > 0" class="attach-list">
               <div v-for="(expense, index) in detail.expenses" :key="expense.id" class="attach-item">
-                {{ index + 1 }}. {{ getCategoryLabel(expense.category) }} -
-                {{ expense.invoiceInfo ? `发票号: ${expense.invoiceInfo.invoiceNo}` : '无发票' }}
+                {{ index + 1 }}. {{ expense.categoryName || expense.description || '费用' }} -
+                {{ expense.invoiceNo ? `发票号: ${expense.invoiceNo}` : '无发票' }}
               </div>
             </div>
             <div v-else class="attach-empty">无附件</div>

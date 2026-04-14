@@ -4,28 +4,41 @@ import type { ExpenseVO } from './expense'
 export interface ReimbursementCreateDTO {
   title: string
   remark?: string
-  expenseIds: string[]
+  expenseIds: number[]
+  tripId?: number
 }
 
 export interface ReimbursementVO {
-  id: string
-  userId: string
+  id: number
+  userId: number
+  reimburseNo: string
   title: string
   totalAmount: number
+  invoiceCount: number
   itemCount: number
-  status: ReimbursementStatus
   remark: string
-  expenses: ExpenseVO[]
+  pdfUrl: string
+  mergedPdfUrl: string
+  zipUrl: string
+  tripId: number
+  reimburseStatus: number
+  exportCount: number
+  exportedAt: string
+  emailSent: number
+  emailAddress: string
+  emailSentAt: string
+  receivedAt: string
+  status: number
   createdAt: string
   updatedAt: string
-  exportedAt: string
+  expenses: ExpenseVO[]
+}
+
+export interface ReimbursementQueryDTO extends PageQuery {
+  reimburseStatus?: number
 }
 
 export type ReimbursementStatus = 'generated' | 'exported' | 'received'
-
-export interface ReimbursementQueryDTO extends PageQuery {
-  status?: ReimbursementStatus
-}
 
 export interface ExportOptions {
   type: 'merged_pdf' | 'zip' | 'report_only' | 'email'

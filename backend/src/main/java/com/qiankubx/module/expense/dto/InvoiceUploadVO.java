@@ -29,4 +29,8 @@ public class InvoiceUploadVO {
     private String invoiceType;
 
     private Boolean parsedSuccess;
+
+    private Boolean parseSuccess;
+
+    private String parseMessage;
 }

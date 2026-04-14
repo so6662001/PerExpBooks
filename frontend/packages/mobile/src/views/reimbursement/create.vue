@@ -2,12 +2,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { getPendingExpenses, createReimbursement, formatAmount, getCategoryLabel, formatDate } from '@qianku/shared'
+import { getPendingExpenses, createReimbursement, formatAmount, formatDate } from '@qianku/shared'
 import type { ExpenseVO } from '@qianku/shared'
 
 const router = useRouter()
 const pendingExpenses = ref<ExpenseVO[]>([])
-const selectedIds = ref<string[]>([])
+const selectedIds = ref<number[]>([])
 const title = ref('')
 const remark = ref('')
 const loading = ref(true)
@@ -36,7 +36,7 @@ onMounted(async () => {
   }
 })
 
-function toggleSelect(id: string) {
+function toggleSelect(id: number) {
   const idx = selectedIds.value.indexOf(id)
   if (idx >= 0) {
     selectedIds.value.splice(idx, 1)
@@ -111,7 +111,7 @@ async function handleCreate() {
           @update:model-value="toggleSelect(expense.id)"
         />
         <div class="check-item-info">
-          <div class="check-item-name">{{ getCategoryLabel(expense.category) }}</div>
+          <div class="check-item-name">{{ expense.categoryName || expense.description || '费用' }}</div>
           <div class="check-item-date">{{ formatDate(expense.expenseDate) }}</div>
         </div>
         <div class="check-item-amount amount">{{ formatAmount(expense.amount) }}</div>

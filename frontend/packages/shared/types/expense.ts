@@ -1,68 +1,72 @@
 import type { PageQuery } from './common'
 
 export interface InvoiceUploadVO {
-  invoiceId: string
-  invoiceType: string
+  fileUrl: string
+  fileName: string
   invoiceNo: string
+  invoiceCode: string
   invoiceDate: string
   amount: number
-  seller: string
-  buyer: string
-  items: InvoiceItemVO[]
-  ocrConfidence: number
-  fileUrl: string
-}
-
-export interface InvoiceItemVO {
-  name: string
-  quantity: number
-  unitPrice: number
-  amount: number
-  taxRate: number
   taxAmount: number
+  sellerName: string
+  buyerName: string
+  invoiceType: string
+  parsedSuccess: boolean
+  parseSuccess: boolean
+  parseMessage: string
 }
 
 export interface ExpenseCreateDTO {
-  invoiceId?: string
-  category: string
+  categoryId: number
+  tripId?: number
+  type: number
   amount: number
-  description: string
+  taxAmount?: number
+  invoiceNo?: string
+  invoiceCode?: string
+  invoiceDate?: string
+  invoiceType?: string
+  sellerName?: string
+  buyerName?: string
+  fileUrl?: string
+  fileName?: string
+  description?: string
   expenseDate: string
-  tripId?: string
-  attachments?: string[]
 }
 
 export interface ExpenseVO {
-  id: string
-  userId: string
-  invoiceId: string
-  category: string
+  id: number
+  userId: number
+  categoryId: number
+  categoryName: string
+  tripId: number
+  type: number
   amount: number
+  taxAmount: number
+  invoiceNo: string
+  invoiceCode: string
+  invoiceDate: string
+  invoiceType: string
+  sellerName: string
+  buyerName: string
+  fileUrl: string
+  fileName: string
   description: string
   expenseDate: string
-  status: ExpenseStatus
-  tripId: string
-  reimbursementId: string
-  attachments: string[]
-  invoiceInfo: InvoiceUploadVO
+  reimburseStatus: number
+  reimbursementId: number
+  dataSign: string
+  status: number
   createdAt: string
   updatedAt: string
 }
 
-export type ExpenseStatus = 'pending' | 'reimbursing' | 'reimbursed'
-
 export interface ExpenseQueryDTO extends PageQuery {
-  status?: ExpenseStatus
-  category?: string
+  categoryId?: number
+  type?: number
+  reimburseStatus?: number
   startDate?: string
   endDate?: string
-  tripId?: string
-}
-
-export interface SubsidyCreateDTO {
-  category: string
-  amount: number
-  description: string
-  expenseDate: string
-  tripId?: string
+  page?: number
+  pageSize?: number
 }

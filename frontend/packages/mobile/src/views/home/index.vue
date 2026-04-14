@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { getStatsOverview, getRecentExpenses, formatAmount, useUserStore } from '@qianku/shared'
 import type { StatsOverviewVO, ExpenseVO } from '@qianku/shared'
-import { getCategoryIcon, getCategoryLabel, getStatusLabel, getStatusColor, formatDate } from '@qianku/shared'
+import { formatDate } from '@qianku/shared'
 
 defineOptions({ name: 'Home' })
 
@@ -49,7 +49,7 @@ function goCreateReimbursement() {
   router.push('/reimbursement/create')
 }
 
-function goExpenseDetail(id: string) {
+function goExpenseDetail(id: number | string) {
   router.push(`/expense/${id}`)
 }
 
@@ -122,15 +122,15 @@ function goStats() {
           class="expense-item card"
           @click="goExpenseDetail(expense.id)"
         >
-          <div class="expense-icon">{{ getCategoryIcon(expense.category) }}</div>
+          <div class="expense-icon">📋</div>
           <div class="expense-info">
-            <div class="expense-name">{{ getCategoryLabel(expense.category) }}</div>
+            <div class="expense-name">{{ expense.categoryName || expense.description || '费用' }}</div>
             <div class="expense-date">{{ formatDate(expense.expenseDate) }}</div>
           </div>
           <div class="expense-right">
             <div class="expense-amount amount">{{ formatAmount(expense.amount) }}</div>
-            <span class="status-tag" :class="expense.status" :style="{ color: getStatusColor(expense.status) }">
-              {{ getStatusLabel(expense.status) }}
+            <span class="status-tag">
+              {{ expense.reimburseStatus === 0 ? '待报销' : expense.reimburseStatus === 1 ? '报销中' : '已报销' }}
             </span>
           </div>
         </div>

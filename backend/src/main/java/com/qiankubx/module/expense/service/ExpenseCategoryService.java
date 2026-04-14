@@ -3,8 +3,10 @@ package com.qiankubx.module.expense.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.qiankubx.common.exception.BizException;
 import com.qiankubx.common.response.ResultCode;
+import com.qiankubx.module.expense.entity.Expense;
 import com.qiankubx.module.expense.entity.ExpenseCategory;
 import com.qiankubx.module.expense.mapper.ExpenseCategoryMapper;
+import com.qiankubx.module.expense.mapper.ExpenseMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +17,7 @@ import java.util.List;
 public class ExpenseCategoryService {
 
     private final ExpenseCategoryMapper categoryMapper;
+    private final ExpenseMapper expenseMapper;
 
     public List<ExpenseCategory> listCategories(Long userId) {
         return categoryMapper.selectList(
@@ -46,6 +49,14 @@ public class ExpenseCategoryService {
         }
         if (category.getIsSystem() == 1) {
             throw new BizException(ResultCode.BAD_REQUEST.getCode(), "系统分类不可删除");
+        }
+        Long count = expenseMapper.selectCount(
+                new LambdaQueryWrapper<Expense>()
+                        .eq(Expense::getCategoryId, categoryId)
+                        .eq(Expense::getStatus, 0)
+        );
+        if (count > 0) {
+            throw new BizException(400, "该分类下还有" + count + "条费用记录，无法删除");
         }
         category.setStatus(1);
         categoryMapper.updateById(category);

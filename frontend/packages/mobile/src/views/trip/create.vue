@@ -8,11 +8,11 @@ const router = useRouter()
 const creating = ref(false)
 
 const form = ref({
+  title: '',
   destination: '',
   startDate: '',
   endDate: '',
-  purpose: '',
-  budget: undefined as number | undefined,
+  subsidyPerDay: undefined as number | undefined,
   remark: '',
 })
 
@@ -20,7 +20,7 @@ const showStartPicker = ref(false)
 const showEndPicker = ref(false)
 
 const canSubmit = computed(() =>
-  form.value.destination && form.value.startDate && form.value.endDate && form.value.purpose,
+  form.value.title && form.value.destination && form.value.startDate && form.value.endDate && form.value.subsidyPerDay,
 )
 
 function onStartDateConfirm({ selectedValues }: any) {
@@ -37,7 +37,14 @@ async function handleSubmit() {
   if (!canSubmit.value) return
   creating.value = true
   try {
-    await createTrip(form.value)
+    await createTrip({
+      title: form.value.title,
+      destination: form.value.destination,
+      startDate: form.value.startDate,
+      endDate: form.value.endDate,
+      subsidyPerDay: form.value.subsidyPerDay!,
+      remark: form.value.remark,
+    })
     showToast({ message: '创建成功', type: 'success' })
     router.back()
   } catch (e: any) {
@@ -53,6 +60,12 @@ async function handleSubmit() {
     <van-nav-bar title="创建出差" left-arrow @click-left="router.back()" />
 
     <div class="form-section card">
+      <van-field
+        v-model="form.title"
+        label="出差标题"
+        placeholder="请输入出差标题"
+        required
+      />
       <van-field
         v-model="form.destination"
         label="出差地点"
@@ -78,19 +91,11 @@ async function handleSubmit() {
         @click="showEndPicker = true"
       />
       <van-field
-        v-model="form.purpose"
-        label="出差事由"
-        placeholder="请输入出差目的"
-        type="textarea"
-        rows="2"
-        autosize
-        required
-      />
-      <van-field
-        v-model.number="form.budget"
-        label="预算(元)"
+        v-model.number="form.subsidyPerDay"
+        label="每日补贴(元)"
         type="number"
-        placeholder="可选填写预算"
+        placeholder="请输入每日补贴金额"
+        required
       />
       <van-field
         v-model="form.remark"

@@ -7,8 +7,6 @@ import {
   exportReimbursement,
   markReceived,
   formatAmount,
-  getCategoryLabel,
-  getStatusLabel,
   formatDate,
 } from '@qianku/shared'
 import type { ReimbursementVO, ExportOptions } from '@qianku/shared'
@@ -75,7 +73,7 @@ async function handleMarkReceived() {
       showCancelButton: true,
     })
     await markReceived(detail.value.id)
-    detail.value.status = 'received'
+    detail.value.reimburseStatus = 2
     showToast({ message: '已标记收款', type: 'success' })
   } catch {
     // cancelled
@@ -93,8 +91,8 @@ async function handleMarkReceived() {
       <div class="detail-header">
         <div class="detail-title">{{ detail.title }}</div>
         <div class="detail-amount amount-large">{{ formatAmount(detail.totalAmount) }}</div>
-        <span class="status-tag" :class="detail.status">
-          {{ getStatusLabel(detail.status) }}
+        <span class="status-tag">
+          {{ detail.reimburseStatus === 0 ? '已生成' : detail.reimburseStatus === 2 ? '已收款' : '已导出' }}
         </span>
       </div>
 
@@ -120,7 +118,7 @@ async function handleMarkReceived() {
         class="expense-item card"
       >
         <div class="expense-info">
-          <span class="expense-name">{{ getCategoryLabel(expense.category) }}</span>
+          <span class="expense-name">{{ expense.categoryName || expense.description || '费用' }}</span>
           <span class="expense-date">{{ formatDate(expense.expenseDate) }}</span>
         </div>
         <span class="expense-amount amount">{{ formatAmount(expense.amount) }}</span>
@@ -146,7 +144,7 @@ async function handleMarkReceived() {
         </div>
       </div>
 
-      <div v-if="detail.status === 'exported'" class="action-bar">
+      <div v-if="detail.reimburseStatus !== 2" class="action-bar">
         <van-button type="primary" block round @click="handleMarkReceived">
           确认收款
         </van-button>

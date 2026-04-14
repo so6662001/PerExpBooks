@@ -1,34 +1,36 @@
 import type { PageQuery } from './common'
+import type { ExpenseVO } from './expense'
 
 export interface TripCreateDTO {
+  title: string
   destination: string
   startDate: string
   endDate: string
-  purpose: string
-  budget?: number
+  subsidyPerDay: number
   remark?: string
 }
 
 export interface TripVO {
-  id: string
-  userId: string
+  id: number
+  userId: number
+  title: string
   destination: string
   startDate: string
   endDate: string
   days: number
-  purpose: string
-  budget: number
-  totalExpense: number
-  expenseCount: number
-  status: TripStatus
+  subsidyPerDay: number
+  subsidyTotal: number
   remark: string
+  status: number
   createdAt: string
+  updatedAt: string
+  expenseCount: number
+  expenses: ExpenseVO[]
+  [key: string]: any
 }
 
-export type TripStatus = 'planned' | 'ongoing' | 'completed' | 'cancelled'
-
 export interface TripQueryDTO extends PageQuery {
-  status?: TripStatus
+  status?: string
   startDate?: string
   endDate?: string
 }

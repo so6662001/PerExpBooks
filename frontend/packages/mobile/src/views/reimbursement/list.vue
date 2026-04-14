@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { listReimbursements, formatAmount, getStatusLabel, formatDate } from '@qianku/shared'
-import type { ReimbursementVO, ReimbursementStatus } from '@qianku/shared'
+import { listReimbursements, formatAmount, formatDate } from '@qianku/shared'
+import type { ReimbursementVO } from '@qianku/shared'
 
 defineOptions({ name: 'ReimbursementList' })
 
@@ -27,17 +27,14 @@ async function loadData(isRefresh = false) {
   }
   loading.value = true
   try {
-    const result = await listReimbursements({
-      pageNum: pageNum.value,
-      pageSize: 20,
-      status: activeTab.value as ReimbursementStatus,
-    })
+    const result = await listReimbursements()
+    const allItems = Array.isArray(result) ? result : (result as any).list || []
     if (isRefresh) {
-      list.value = result.list
+      list.value = allItems
     } else {
-      list.value.push(...result.list)
+      list.value = allItems
     }
-    if (list.value.length >= result.total) finished.value = true
+    finished.value = true
     pageNum.value++
   } catch {
     finished.value = true
@@ -86,12 +83,12 @@ function goCreate() {
           v-for="item in list"
           :key="item.id"
           class="reimb-card card"
-          @click="goDetail(item.id)"
+          @click="goDetail(String(item.id))"
         >
           <div class="reimb-header">
             <span class="reimb-title">{{ item.title }}</span>
-            <span class="status-tag" :class="item.status">
-              {{ getStatusLabel(item.status) }}
+            <span class="status-tag">
+              {{ item.reimburseStatus === 0 ? '已生成' : item.reimburseStatus === 2 ? '已收款' : '已导出' }}
             </span>
           </div>
           <div class="reimb-body">

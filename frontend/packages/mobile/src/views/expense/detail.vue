@@ -2,13 +2,20 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showDialog, showToast } from 'vant'
-import { getExpenseDetail, deleteExpense, formatAmount, getCategoryLabel, getStatusLabel, getStatusColor, formatDate } from '@qianku/shared'
+import { getExpenseDetail, deleteExpense, formatAmount, formatDate } from '@qianku/shared'
 import type { ExpenseVO } from '@qianku/shared'
 
 const route = useRoute()
 const router = useRouter()
 const expense = ref<ExpenseVO | null>(null)
 const loading = ref(true)
+
+function getReimburseStatusLabel(s: number) {
+  if (s === 0) return '待报销'
+  if (s === 1) return '报销中'
+  if (s === 2) return '已报销'
+  return '未知'
+}
 
 onMounted(async () => {
   const id = route.params.id as string
@@ -48,15 +55,15 @@ async function handleDelete() {
     <template v-if="expense">
       <div class="amount-header">
         <div class="amount-value">{{ formatAmount(expense.amount) }}</div>
-        <span class="status-tag" :class="expense.status">
-          {{ getStatusLabel(expense.status) }}
+        <span class="status-tag">
+          {{ getReimburseStatusLabel(expense.reimburseStatus) }}
         </span>
       </div>
 
       <div class="detail-card card">
         <div class="detail-row">
           <span class="label">费用类别</span>
-          <span class="value">{{ getCategoryLabel(expense.category) }}</span>
+          <span class="value">{{ expense.categoryName || '-' }}</span>
         </div>
         <div class="detail-row">
           <span class="label">费用日期</span>
@@ -72,23 +79,23 @@ async function handleDelete() {
         </div>
       </div>
 
-      <div v-if="expense.invoiceInfo" class="detail-card card">
+      <div v-if="expense.invoiceNo" class="detail-card card">
         <h4 class="card-title">发票信息</h4>
         <div class="detail-row">
           <span class="label">发票号码</span>
-          <span class="value">{{ expense.invoiceInfo.invoiceNo }}</span>
+          <span class="value">{{ expense.invoiceNo }}</span>
         </div>
-        <div class="detail-row">
+        <div v-if="expense.invoiceType" class="detail-row">
           <span class="label">发票类型</span>
-          <span class="value">{{ expense.invoiceInfo.invoiceType }}</span>
+          <span class="value">{{ expense.invoiceType }}</span>
         </div>
-        <div class="detail-row">
+        <div v-if="expense.sellerName" class="detail-row">
           <span class="label">销方名称</span>
-          <span class="value">{{ expense.invoiceInfo.seller }}</span>
+          <span class="value">{{ expense.sellerName }}</span>
         </div>
       </div>
 
-      <div v-if="expense.status === 'pending'" class="action-bar">
+      <div v-if="expense.reimburseStatus === 0" class="action-bar">
         <van-button plain round type="danger" @click="handleDelete">
           删除
         </van-button>

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showLoadingToast, closeToast } from 'vant'
-import { uploadInvoice, createExpense } from '@qianku/shared'
+import { uploadInvoice, createExpense, listCategories } from '@qianku/shared'
 import type { InvoiceUploadVO } from '@qianku/shared'
 
 const router = useRouter()
@@ -12,30 +12,44 @@ const uploading = ref(false)
 const creating = ref(false)
 const step = ref<'upload' | 'confirm'>('upload')
 
-const category = ref('other')
+const categoryId = ref<number | undefined>(undefined)
 const description = ref('')
+const manualAmount = ref<number | undefined>(undefined)
+const manualDate = ref('')
 
-const categoryOptions = [
-  { text: '交通', value: 'transport' },
-  { text: '住宿', value: 'accommodation' },
-  { text: '餐饮', value: 'meal' },
-  { text: '办公', value: 'office' },
-  { text: '通讯', value: 'communication' },
-  { text: '其他', value: 'other' },
-]
+const categoryOptions = ref<{ text: string; value: number }[]>([])
+
+onMounted(async () => {
+  try {
+    const result = await listCategories()
+    categoryOptions.value = (result as any[]).map((c: any) => ({
+      text: c.name,
+      value: c.id,
+    }))
+    if (categoryOptions.value.length > 0) {
+      categoryId.value = categoryOptions.value[0].value
+    }
+  } catch {
+    // ignore
+  }
+})
 
 const canSubmit = computed(() =>
-  invoiceResult.value && category.value && !creating.value,
+  invoiceResult.value && categoryId.value && !creating.value,
 )
 
 async function handleUpload(file: any) {
   uploading.value = true
-  showLoadingToast({ message: '识别中...', forbidClick: true, duration: 0 })
+  showLoadingToast({ message: '上传中...', forbidClick: true, duration: 0 })
   try {
     const result = await uploadInvoice(file.file)
     invoiceResult.value = result
     step.value = 'confirm'
-    showToast({ message: '识别成功', type: 'success' })
+    if (result.parseSuccess) {
+      showToast({ message: '识别成功', type: 'success' })
+    } else {
+      showToast({ message: result.parseMessage || '请手动填写信息' })
+    }
   } catch (e: any) {
     showToast(e.message || '上传失败')
   } finally {
@@ -47,14 +61,28 @@ async function handleUpload(file: any) {
 
 async function handleCreate() {
   if (!invoiceResult.value || !canSubmit.value) return
+  const amount = invoiceResult.value.amount || manualAmount.value
+  const expenseDate = invoiceResult.value.invoiceDate || manualDate.value
+  if (!amount || !expenseDate) {
+    showToast('请填写金额和日期')
+    return
+  }
   creating.value = true
   try {
     await createExpense({
-      invoiceId: invoiceResult.value.invoiceId,
-      category: category.value,
-      amount: invoiceResult.value.amount,
-      description: description.value || `${invoiceResult.value.seller} - 发票`,
-      expenseDate: invoiceResult.value.invoiceDate,
+      categoryId: categoryId.value!,
+      type: 1,
+      amount: amount,
+      invoiceNo: invoiceResult.value.invoiceNo || undefined,
+      invoiceCode: invoiceResult.value.invoiceCode || undefined,
+      invoiceDate: invoiceResult.value.invoiceDate || undefined,
+      sellerName: invoiceResult.value.sellerName || undefined,
+      buyerName: invoiceResult.value.buyerName || undefined,
+      taxAmount: invoiceResult.value.taxAmount || undefined,
+      fileUrl: invoiceResult.value.fileUrl || undefined,
+      fileName: invoiceResult.value.fileName || undefined,
+      description: description.value || undefined,
+      expenseDate: expenseDate,
     })
     showToast({ message: '创建成功', type: 'success' })
     router.back()
@@ -69,6 +97,8 @@ function resetUpload() {
   step.value = 'upload'
   invoiceResult.value = null
   fileList.value = []
+  manualAmount.value = undefined
+  manualDate.value = ''
 }
 </script>
 
@@ -104,44 +134,52 @@ function resetUpload() {
     </template>
 
     <template v-if="step === 'confirm' && invoiceResult">
+      <div v-if="!invoiceResult.parseSuccess" class="parse-hint card">
+        <p style="color: #FF9500; font-weight: 500;">{{ invoiceResult.parseMessage }}</p>
+      </div>
+
       <div class="result-card card">
         <h3 class="result-title">📄 发票信息</h3>
         <div class="result-items">
-          <div class="result-item">
+          <div v-if="invoiceResult.invoiceNo" class="result-item">
             <span class="label">发票号码</span>
             <span class="value">{{ invoiceResult.invoiceNo }}</span>
           </div>
-          <div class="result-item">
+          <div v-if="invoiceResult.invoiceDate" class="result-item">
             <span class="label">开票日期</span>
             <span class="value">{{ invoiceResult.invoiceDate }}</span>
           </div>
-          <div class="result-item">
+          <div v-if="invoiceResult.amount" class="result-item">
             <span class="label">金额</span>
             <span class="value amount" style="color: var(--color-primary)">
-              ¥{{ invoiceResult.amount.toFixed(2) }}
+              ¥{{ Number(invoiceResult.amount).toFixed(2) }}
             </span>
           </div>
-          <div class="result-item">
+          <div v-if="invoiceResult.sellerName" class="result-item">
             <span class="label">销方</span>
-            <span class="value">{{ invoiceResult.seller }}</span>
-          </div>
-          <div class="result-item">
-            <span class="label">识别置信度</span>
-            <span class="value">{{ (invoiceResult.ocrConfidence * 100).toFixed(0) }}%</span>
+            <span class="value">{{ invoiceResult.sellerName }}</span>
           </div>
         </div>
       </div>
 
-      <div class="form-card card">
+      <div v-if="!invoiceResult.parseSuccess" class="form-card card">
         <van-field
-          v-model="category"
-          is-link
-          readonly
-          label="费用类别"
-          placeholder="选择类别"
-          @click="() => {}"
+          v-model.number="manualAmount"
+          label="金额(元)"
+          type="number"
+          placeholder="请输入金额"
+          required
         />
-        <van-radio-group v-model="category" direction="horizontal" class="category-group">
+        <van-field
+          v-model="manualDate"
+          label="费用日期"
+          placeholder="请输入日期 YYYY-MM-DD"
+          required
+        />
+      </div>
+
+      <div class="form-card card">
+        <van-radio-group v-model="categoryId" direction="horizontal" class="category-group">
           <van-radio
             v-for="opt in categoryOptions"
             :key="opt.value"

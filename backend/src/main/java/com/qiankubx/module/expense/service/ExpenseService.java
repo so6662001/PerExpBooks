@@ -25,6 +25,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -41,27 +42,36 @@ public class ExpenseService {
     private final UserMapper userMapper;
 
     public InvoiceUploadVO uploadInvoice(Long userId, MultipartFile file) {
-        checkInvoiceQuota(userId);
-
         if (file.isEmpty()) {
             throw new BizException(ResultCode.BAD_REQUEST.getCode(), "文件不能为空");
         }
 
         String originalFilename = file.getOriginalFilename();
-        String suffix = "";
+        String ext = "";
         if (originalFilename != null && originalFilename.contains(".")) {
-            suffix = originalFilename.substring(originalFilename.lastIndexOf("."));
+            ext = originalFilename.substring(originalFilename.lastIndexOf(".") + 1).toLowerCase();
         }
+        if (!Set.of("pdf", "ofd", "jpg", "jpeg", "png").contains(ext)) {
+            throw new BizException(400, "不支持的文件格式，请上传PDF/OFD/JPG/PNG文件");
+        }
+
+        if (file.getSize() > 10 * 1024 * 1024) {
+            throw new BizException(400, "文件大小不能超过10MB");
+        }
+
+        checkInvoiceQuota(userId);
+
+        String suffix = "." + ext;
         String objectKey = ossConfig.getDirs().getInvoice() + UUID.randomUUID() + suffix;
 
-        byte[] pdfBytes;
+        byte[] fileBytes;
         try {
-            pdfBytes = file.getBytes();
+            fileBytes = file.getBytes();
         } catch (IOException e) {
             throw new BizException(ResultCode.INTERNAL_ERROR.getCode(), "文件读取失败");
         }
 
-        ossClient.putObject(ossConfig.getBucketName(), objectKey, new ByteArrayInputStream(pdfBytes));
+        ossClient.putObject(ossConfig.getBucketName(), objectKey, new ByteArrayInputStream(fileBytes));
 
         String fileUrl;
         if (ossConfig.getCdnDomain() != null && !ossConfig.getCdnDomain().isBlank()) {
@@ -70,17 +80,32 @@ public class ExpenseService {
             fileUrl = "https://" + ossConfig.getBucketName() + "." + ossConfig.getEndpoint() + "/" + objectKey;
         }
 
-        InvoiceUploadVO vo = invoiceParseEngine.parseFromPdf(pdfBytes);
-        vo.setFileUrl(fileUrl);
-        vo.setFileName(originalFilename);
+        incrementInvoiceUsed(userId);
 
-        return vo;
+        InvoiceUploadVO result;
+        if ("pdf".equals(ext)) {
+            result = invoiceParseEngine.parseFromPdf(fileBytes);
+            result.setParseSuccess(result.getParsedSuccess() != null && result.getParsedSuccess());
+            result.setParseMessage(result.getParseSuccess() ? "PDF发票解析成功" : "PDF发票解析未能提取完整信息，请手动补充");
+        } else if ("ofd".equals(ext)) {
+            result = new InvoiceUploadVO();
+            result.setParsedSuccess(false);
+            result.setParseSuccess(false);
+            result.setParseMessage("OFD格式暂不支持自动解析，请手动填写信息");
+        } else {
+            result = new InvoiceUploadVO();
+            result.setParsedSuccess(false);
+            result.setParseSuccess(false);
+            result.setParseMessage("图片发票暂不支持自动解析，请手动填写信息");
+        }
+        result.setFileUrl(fileUrl);
+        result.setFileName(originalFilename);
+
+        return result;
     }
 
     @Transactional(rollbackFor = Exception.class)
     public Expense createExpense(Long userId, ExpenseCreateDTO dto) {
-        checkInvoiceQuota(userId);
-
         Expense expense = new Expense();
         expense.setUserId(userId);
         expense.setCategoryId(dto.getCategoryId());
@@ -108,14 +133,15 @@ public class ExpenseService {
 
         expenseMapper.insert(expense);
 
-        incrementInvoiceUsed(userId);
-
         return expense;
     }
 
     @Transactional(rollbackFor = Exception.class)
     public Expense updateExpense(Long userId, ExpenseUpdateDTO dto) {
         Expense expense = getByIdAndUserId(dto.getId(), userId);
+        if (expense.getReimburseStatus() != null && expense.getReimburseStatus() > 0) {
+            throw new BizException(400, "已提交报销的费用不允许编辑");
+        }
 
         expense.setCategoryId(dto.getCategoryId());
         expense.setTripId(dto.getTripId());
@@ -143,6 +169,9 @@ public class ExpenseService {
 
     public void deleteExpense(Long userId, Long expenseId) {
         Expense expense = getByIdAndUserId(expenseId, userId);
+        if (expense.getReimburseStatus() != null && expense.getReimburseStatus() > 0) {
+            throw new BizException(400, "已提交报销的费用不允许删除");
+        }
         expense.setStatus(1);
         expense.setUpdatedAt(LocalDateTime.now());
         expenseMapper.updateById(expense);
@@ -227,12 +256,11 @@ public class ExpenseService {
         }
     }
 
-    private String buildSignPayload(Expense expense) {
+    public String buildSignPayload(Expense expense) {
         return expense.getId() + "|"
                 + expense.getUserId() + "|"
                 + expense.getAmount() + "|"
-                + expense.getType() + "|"
-                + expense.getExpenseDate() + "|"
-                + expense.getInvoiceNo();
+                + expense.getReimburseStatus() + "|"
+                + expense.getCreatedAt();
     }
 }
