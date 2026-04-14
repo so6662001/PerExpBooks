@@ -28,7 +28,6 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -87,22 +86,19 @@ public class PdfCoverService {
             return PdfFontFactory.createFont("STSongStd-Light", "UniGB-UCS2-H");
         } catch (Exception e1) {
             log.warn("无法加载STSongStd-Light字体，尝试系统字体");
-            try {
-                String[] systemFonts = {
-                        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc,0",
-                        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc,0",
-                        "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
-                        "C:/Windows/Fonts/simsun.ttc,0"
-                };
-                for (String fontPath : systemFonts) {
-                    try {
-                        return PdfFontFactory.createFont(fontPath, PdfEncodings.IDENTITY_H);
-                    } catch (Exception ignored) {
-                    }
+            String[] systemFonts = {
+                    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc,0",
+                    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc,0",
+                    "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+                    "C:/Windows/Fonts/simsun.ttc,0"
+            };
+            for (String fontPath : systemFonts) {
+                try {
+                    return PdfFontFactory.createFont(fontPath, PdfEncodings.IDENTITY_H);
+                } catch (Exception ignored) {
                 }
-            } catch (Exception e2) {
-                log.warn("无法加载系统中文字体，使用默认字体");
             }
+            log.warn("无法加载系统中文字体，使用默认字体");
             try {
                 return PdfFontFactory.createFont();
             } catch (Exception e) {
@@ -115,9 +111,9 @@ public class PdfCoverService {
         Paragraph title = new Paragraph("费用报销单")
                 .setFont(font)
                 .setFontSize(22)
+                .simulateBold()
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMarginBottom(20);
-        title.setProperty(com.itextpdf.layout.properties.Property.BOLD_SIMULATION, true);
         document.add(title);
     }
 
@@ -154,9 +150,9 @@ public class PdfCoverService {
         Paragraph subtitle = new Paragraph("费用明细")
                 .setFont(font)
                 .setFontSize(14)
+                .simulateBold()
                 .setMarginTop(10)
                 .setMarginBottom(8);
-        subtitle.setProperty(com.itextpdf.layout.properties.Property.BOLD_SIMULATION, true);
         document.add(subtitle);
 
         Table table = new Table(UnitValue.createPercentArray(new float[]{0.5f, 1.5f, 2f, 1.5f, 1f}))
@@ -166,7 +162,7 @@ public class PdfCoverService {
         String[] headers = {"序号", "类别", "发票号码", "金额(元)", "备注"};
         for (String header : headers) {
             table.addHeaderCell(new Cell()
-                    .add(new Paragraph(header).setFont(font).setFontSize(9))
+                    .add(new Paragraph(header).setFont(font).setFontSize(9).simulateBold())
                     .setBackgroundColor(HEADER_BG)
                     .setFontColor(ColorConstants.WHITE)
                     .setTextAlignment(TextAlignment.CENTER)
@@ -210,20 +206,16 @@ public class PdfCoverService {
                 .useAllAvailableWidth()
                 .setMarginTop(5);
 
-        Paragraph totalLabel = new Paragraph("合计金额").setFont(font).setFontSize(11);
-        totalLabel.setProperty(com.itextpdf.layout.properties.Property.BOLD_SIMULATION, true);
         totalTable.addCell(new Cell()
-                .add(totalLabel)
+                .add(new Paragraph("合计金额").setFont(font).setFontSize(11).simulateBold())
                 .setTextAlignment(TextAlignment.RIGHT)
                 .setBorder(Border.NO_BORDER)
                 .setPadding(5));
 
-        Paragraph totalValue = new Paragraph("¥ " + reimbursement.getTotalAmount().toPlainString())
-                .setFont(font).setFontSize(11)
-                .setFontColor(new DeviceRgb(220, 53, 69));
-        totalValue.setProperty(com.itextpdf.layout.properties.Property.BOLD_SIMULATION, true);
         totalTable.addCell(new Cell()
-                .add(totalValue)
+                .add(new Paragraph("¥ " + reimbursement.getTotalAmount().toPlainString())
+                        .setFont(font).setFontSize(11).simulateBold()
+                        .setFontColor(new DeviceRgb(220, 53, 69)))
                 .setTextAlignment(TextAlignment.RIGHT)
                 .setBorder(Border.NO_BORDER)
                 .setPadding(5));
@@ -240,21 +232,20 @@ public class PdfCoverService {
             return;
         }
 
-        Paragraph attachTitle = new Paragraph("附件清单")
+        Paragraph subtitle = new Paragraph("附件清单")
                 .setFont(font)
                 .setFontSize(14)
+                .simulateBold()
                 .setMarginTop(15)
                 .setMarginBottom(8);
-        attachTitle.setProperty(com.itextpdf.layout.properties.Property.BOLD_SIMULATION, true);
-        document.add(attachTitle);
+        document.add(subtitle);
 
         for (int i = 0; i < withFiles.size(); i++) {
             Expense expense = withFiles.get(i);
-            String line = (i + 1) + ". " +
-                    (expense.getInvoiceType() != null ? expense.getInvoiceType() : "发票") +
-                    " - " +
-                    (expense.getInvoiceNo() != null ? expense.getInvoiceNo() : "无编号") +
-                    " (" + expense.getAmount().toPlainString() + "元)";
+            String category = expense.getInvoiceType() != null ? expense.getInvoiceType() : "发票";
+            String invoiceNo = expense.getInvoiceNo() != null ? expense.getInvoiceNo() : "无编号";
+            String line = (i + 1) + ". " + category + " - " + invoiceNo
+                    + " (" + expense.getAmount().toPlainString() + "元)";
             document.add(new Paragraph(line).setFont(font).setFontSize(9).setMarginBottom(2));
         }
     }

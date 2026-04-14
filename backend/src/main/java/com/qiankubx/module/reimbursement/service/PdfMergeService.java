@@ -7,6 +7,7 @@ import com.qiankubx.module.expense.entity.Expense;
 import com.qiankubx.module.reimbursement.entity.Reimbursement;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.io.RandomAccessReadBuffer;
 import org.apache.pdfbox.multipdf.PDFMergerUtility;
 import org.springframework.stereotype.Service;
@@ -43,9 +44,9 @@ public class PdfMergeService {
                         && expense.getFileUrl().toLowerCase().endsWith(".pdf")) {
                     String expenseKey = extractOssKey(expense.getFileUrl());
                     try {
-                        byte[] bytes = downloadBytes(expenseKey);
-                        if (bytes != null) {
-                            merger.addSource(new RandomAccessReadBuffer(bytes));
+                        byte[] data = downloadBytes(expenseKey);
+                        if (data != null) {
+                            merger.addSource(new RandomAccessReadBuffer(data));
                         }
                     } catch (Exception e) {
                         log.warn("下载费用PDF失败, expenseId={}, url={}", expense.getId(), expense.getFileUrl(), e);
@@ -53,7 +54,7 @@ public class PdfMergeService {
                 }
             }
 
-            merger.mergeDocuments(null);
+            merger.mergeDocuments(IOUtils.createMemoryOnlyStreamCache());
 
             String objectKey = ossConfig.getDirs().getMerged()
                     + reimbursement.getReimburseNo() + "_merged.pdf";

@@ -15,6 +15,8 @@ public class ExpenseVO {
 
     private Long categoryId;
 
+    private String categoryName;
+
     private Long tripId;
 
     private Integer type;
@@ -54,6 +56,4 @@ public class ExpenseVO {
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
-
-    private String categoryName;
 }

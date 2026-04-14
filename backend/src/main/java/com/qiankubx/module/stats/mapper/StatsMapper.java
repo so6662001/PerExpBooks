@@ -47,14 +47,15 @@ public interface StatsMapper {
 
     @Select("""
             SELECT
-                category_id AS categoryId,
-                category_name AS categoryName,
-                COALESCE(SUM(amount), 0) AS amount
-            FROM t_expense
-            WHERE user_id = #{userId} AND status = 0
-                AND expense_date >= #{startDate}
-                AND expense_date <= #{endDate}
-            GROUP BY category_id, category_name
+                e.category_id AS categoryId,
+                COALESCE(c.name, e.invoice_type, '其他') AS categoryName,
+                COALESCE(SUM(e.amount), 0) AS amount
+            FROM t_expense e
+            LEFT JOIN t_category c ON e.category_id = c.id
+            WHERE e.user_id = #{userId} AND e.status = 0
+                AND e.expense_date >= #{startDate}
+                AND e.expense_date <= #{endDate}
+            GROUP BY e.category_id, categoryName
             ORDER BY amount DESC
             """)
     List<CategoryRatioVO> selectCategoryRatio(@Param("userId") Long userId,

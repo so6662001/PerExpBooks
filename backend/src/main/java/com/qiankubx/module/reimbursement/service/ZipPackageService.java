@@ -79,11 +79,9 @@ public class ZipPackageService {
                 continue;
             }
             String ext = getFileExtension(expense.getFileUrl());
-            String fileName = String.format("发票/%02d_%s_%s%s",
-                    i + 1,
-                    expense.getInvoiceType() != null ? expense.getInvoiceType() : "其他",
-                    expense.getAmount() != null ? expense.getAmount().toPlainString() : "0",
-                    ext);
+            String category = expense.getInvoiceType() != null ? expense.getInvoiceType() : "其他";
+            String amountStr = expense.getAmount() != null ? expense.getAmount().toPlainString() : "0";
+            String fileName = String.format("发票/%02d_%s_%s%s", i + 1, category, amountStr, ext);
 
             zos.putNextEntry(new ZipEntry(fileName));
             zos.write(data);
