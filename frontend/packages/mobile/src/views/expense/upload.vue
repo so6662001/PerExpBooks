@@ -28,7 +28,7 @@ const canSubmit = computed(() =>
   invoiceResult.value && category.value && !creating.value,
 )
 
-async function handleUpload(file: { file: File }) {
+async function handleUpload(file: any) {
   uploading.value = true
   showLoadingToast({ message: '识别中...', forbidClick: true, duration: 0 })
   try {
