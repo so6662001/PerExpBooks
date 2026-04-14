@@ -61,10 +61,10 @@
                         │
 ┌───────────────────────┼──────────────────────────────────┐
 │                   数据 & 存储层                           │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐   │
-│  │  MySQL   │  │  Redis   │  │  MinIO   │  │ 消息队列│   │
-│  │ 8.0+    │  │  缓存     │  │ 文件存储  │  │RabbitMQ│   │
-│  └──────────┘  └──────────┘  └──────────┘  └────────┘   │
+│  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌────────┐  │
+│  │  MySQL   │  │  Redis   │  │ 阿里云OSS │  │ 消息队列│  │
+│  │ 8.0+    │  │  缓存     │  │  文件存储  │  │RabbitMQ│  │
+│  └──────────┘  └──────────┘  └───────────┘  └────────┘  │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -80,7 +80,7 @@
 | **ORM** | MyBatis-Plus | 简化数据库操作 |
 | **数据库** | MySQL 8.0 | 主数据库 |
 | **缓存** | Redis 7 | 会话缓存、验证码、限流 |
-| **文件存储** | MinIO / 阿里云 OSS | 发票 PDF、报销单存储 |
+| **文件存储** | 阿里云 OSS | 发票PDF、报销单、合并PDF、ZIP打包文件存储 |
 | **PDF 解析** | Apache PDFBox | 解析发票 PDF |
 | **PDF 生成** | iText 7 / Flying Saucer | 生成报销单 PDF |
 | **PDF 合并** | Apache PDFBox / iText 7 | 合并报销单与发票原件为一个PDF |
@@ -171,7 +171,7 @@
 用户拖入/选择 PDF 发票
         │
         ▼
-  上传至服务器 (MinIO)
+  上传至阿里云 OSS
         │
         ▼
   异步解析发票 (PDFBox)
@@ -1842,7 +1842,7 @@ expense-manager/
 │   │   ├── config/                      # 配置类
 │   │   │   ├── WebMvcConfig.java
 │   │   │   ├── RedisConfig.java
-│   │   │   ├── MinioConfig.java
+│   │   │   ├── OssConfig.java           # 阿里云 OSS 配置
 │   │   │   ├── RabbitMQConfig.java
 │   │   │   └── SwaggerConfig.java
 │   │   ├── exception/                   # 异常处理
@@ -2006,8 +2006,9 @@ docker-compose.yml
 ├── nginx               (反向代理, 端口 80/443)
 ├── mysql               (数据库, 端口 3306)
 ├── redis               (缓存, 端口 6379)
-├── minio               (文件存储, 端口 9000)
 └── rabbitmq            (消息队列, 端口 5672/15672)
+
+文件存储: 阿里云 OSS (云服务，无需本地部署)
 ```
 
 ### 8.2 Nginx 路由规则
@@ -2016,8 +2017,9 @@ docker-compose.yml
 /api/*          → expense-backend:8080
 /m/*            → expense-mobile:3000     (移动端H5)
 /               → expense-desktop:3001    (PC端)
-/files/*        → minio:9000              (文件访问)
 ```
+
+文件访问通过阿里云 OSS 的 CDN 域名直接访问，无需经过 Nginx 代理。
 
 ---
 
@@ -2027,7 +2029,7 @@ docker-compose.yml
 |--------|------|
 | 接口认证 | JWT Token + Refresh Token 双 Token 机制 |
 | 数据加密 | 敏感数据 AES 加密存储，传输全程 HTTPS |
-| 文件安全 | 文件上传类型校验、大小限制(单文件10MB)、病毒扫描 |
+| 文件安全 | 文件上传类型校验、大小限制(单文件10MB)、OSS服务端加密(SSE)、STS临时授权上传 |
 | 接口限流 | Redis 令牌桶限流，防止恶意请求 |
 | SQL 注入 | MyBatis 参数化查询，禁止拼接 SQL |
 | XSS 防护 | 输入输出转义，CSP 策略 |
@@ -2046,7 +2048,7 @@ docker-compose.yml
 │  发票文件 │    │ 发票内容  │    │  记录    │    │ /修改信息 │
 └──────────┘    └──────────┘    └──────────┘    └────┬─────┘
   (发票原件                                          │
-   保存在MinIO)                                      │
+   保存在阿里云OSS)                                      │
                                                      │
 ┌──────────────────────────────────────────┐         │
 │            创建报销单                     │←────────┘
@@ -2247,11 +2249,17 @@ MYSQL_PASSWORD: ****
 REDIS_HOST: localhost
 REDIS_PORT: 6379
 
-# MinIO
-MINIO_ENDPOINT: http://localhost:9000
-MINIO_ACCESS_KEY: ****
-MINIO_SECRET_KEY: ****
-MINIO_BUCKET: expense-files
+# 阿里云 OSS
+OSS_ENDPOINT: oss-cn-hangzhou.aliyuncs.com
+OSS_ACCESS_KEY_ID: ****
+OSS_ACCESS_KEY_SECRET: ****
+OSS_BUCKET_NAME: expense-files
+OSS_CDN_DOMAIN: https://files.your-domain.com
+OSS_DIR_INVOICE: invoice/
+OSS_DIR_REIMBURSEMENT: reimbursement/
+OSS_DIR_MERGED_PDF: merged/
+OSS_DIR_ZIP: zip/
+OSS_DIR_POSTER: poster/
 
 # 微信小程序
 WX_APP_ID: ****
