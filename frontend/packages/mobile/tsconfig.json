@@ -11,7 +11,6 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
     "noEmit": true,
-    "composite": true,
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
@@ -19,8 +18,5 @@
       "@qianku/shared/*": ["../shared/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue", "env.d.ts"],
-  "references": [
-    { "path": "../shared" }
-  ]
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue", "env.d.ts", "../shared/**/*.ts"]
 }
