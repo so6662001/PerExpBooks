@@ -81,7 +81,9 @@
 | **数据库** | MySQL 8.0 | 主数据库 |
 | **缓存** | Redis 7 | 会话缓存、验证码、限流 |
 | **文件存储** | 阿里云 OSS | 发票PDF、报销单、合并PDF、ZIP打包文件存储 |
-| **PDF 解析** | Apache PDFBox | 解析发票 PDF |
+| **PDF 解析** | Apache PDFBox | 第一级解析：电子发票PDF文本提取 |
+| **OFD 解析** | ofdrw 开源库 | 第一级解析：OFD格式全电发票解析 |
+| **云端 OCR** | 百度OCR API / 腾讯OCR API | 第二级解析：拍照识别+PDFBox降级+OFD降级 |
 | **PDF 生成** | iText 7 / Flying Saucer | 生成报销单 PDF |
 | **PDF 合并** | Apache PDFBox / iText 7 | 合并报销单与发票原件为一个PDF |
 | **ZIP 打包** | Java ZipOutputStream | 打包报销材料为ZIP文件 |
@@ -287,11 +289,20 @@
   用户确认/修改信息
 ```
 
-**发票解析策略：**
-- 电子发票 PDF：使用 PDFBox 提取文本，正则匹配关键字段
-- 增值税发票：识别发票代码、号码、金额、税额等标准字段
-- 火车票/机票：识别出发地、目的地、金额、日期
-- 解析失败时：提示用户手动填写关键信息（金额、发票号必填）
+**三级发票解析引擎：**
+
+| 文件类型 | 第一级（免费） | 第二级（OCR降级） | 第三级（兜底） |
+|----------|-------------|-----------------|-------------|
+| 电子发票PDF | PDFBox文本提取+正则 | 转图片→百度OCR API | 手动输入金额 |
+| 全电发票OFD | ofdrw开源库解析 | 百度OCR(支持OFD) | 手动输入金额 |
+| 全电发票XML | 直接解析XML结构化数据(100%准确) | 不需要降级 | - |
+| 拍照图片(JPG/PNG) | 不支持 | 直接调百度OCR API | 手动输入金额 |
+| 扫描版PDF(图片) | PDFBox提取为空→自动检测 | 转图片→百度OCR API | 手动输入金额 |
+
+- 第一级成本¥0，覆盖约70%的发票，准确率95-99%
+- 第二级成本约¥0.03/次，覆盖约25%的发票，准确率98-99%
+- 第三级仅需用户填写「金额」一个字段，不阻断流程
+- 综合加权准确率：**95-98%**
 
 **发票分类：**
 
@@ -2239,7 +2250,12 @@ expense-manager/
 │   │   │   ├── service/
 │   │   │   │   ├── ExpenseService.java
 │   │   │   │   ├── TripService.java
-│   │   │   │   └── InvoiceParseService.java
+│   │   │   │   ├── InvoiceParseEngine.java    # 三级解析引擎调度
+│   │   │   │   ├── PdfBoxParseService.java    # 第一级：PDFBox文本提取
+│   │   │   │   ├── OfdParseService.java       # 第一级：OFD格式解析
+│   │   │   │   ├── XmlParseService.java       # 第一级：XML直接解析
+│   │   │   │   ├── OcrApiService.java         # 第二级：云端OCR API调用
+│   │   │   │   └── ImagePreprocessService.java # 图片预处理(裁剪/校正)
 │   │   │   ├── mapper/
 │   │   │   ├── entity/
 │   │   │   ├── dto/
