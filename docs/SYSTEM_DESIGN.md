@@ -155,12 +155,105 @@
 - **手机号登录**：H5 / PC 端通过手机号 + 短信验证码登录
 - **邀请码绑定**：注册时可填写邀请码，绑定推荐关系
 
-#### 3.2.2 个人中心
+#### 3.2.2 协议版本管理与签署
+
+**设计背景**：用户协议和隐私政策会随业务发展和法规变化进行修订。每次修订后，所有用户必须重新阅读并同意新版协议才能继续使用产品，同时需要保留用户每次签署的历史记录作为法律凭证。
+
+**协议版本生命周期：**
+
+```
+管理员发布新版协议
+        │
+        ▼
+  版本状态: 待生效 (draft)
+  ├── 设定生效日期 (可设未来日期，提前通知用户)
+  ├── 设定变更等级: 普通变更 / 重大变更
+  └── 录入变更摘要 (让用户快速了解改了什么)
+        │
+        ▼
+  到达生效日期 → 状态变为: 生效中 (active)
+        │
+        ├── 替代上一个版本 → 上一版本状态变为: 已归档 (archived)
+        │
+        └── 触发用户重新确认机制
+                │
+                ├── 重大变更：强制弹窗，必须勾选同意才能继续使用
+                └── 普通变更：进入应用时顶部通知栏提示，点击查看并同意
+```
+
+**用户签署/重新确认流程：**
+
+```
+用户打开应用 / 刷新页面
+        │
+        ▼
+  前端请求 → GET /api/v1/agreement/check
+        │
+        ▼
+  后端检查：用户最后签署的协议版本 vs 当前生效版本
+        │
+        ├── 版本一致 → 正常使用，不弹窗
+        │
+        └── 版本不一致（有新版协议未签署）
+            │
+            ├── 判断变更等级
+            │
+            ├── [重大变更] → 返回 need_consent: true, block: true
+            │   │
+            │   ▼
+            │   前端展示全屏强制确认弹窗
+            │   ├── 显示协议全文 (可滚动阅读)
+            │   ├── 高亮显示「本次变更摘要」
+            │   ├── 必须滚动到底部才能点击同意
+            │   ├── 提供「查看完整变更对比」链接
+            │   ├── [同意并继续] → 记录签署 → 正常使用
+            │   └── [不同意] → 提示：不同意将无法继续使用
+            │       └── 可选择注销账号或联系客服
+            │
+            └── [普通变更] → 返回 need_consent: true, block: false
+                │
+                ▼
+                前端展示非阻断式通知栏
+                ├── 顶部通知: 「协议已更新，请查看最新版本」
+                ├── 用户点击 → 展示变更摘要 → [我已知悉]
+                └── 记录签署 → 通知栏消失
+```
+
+**首次注册签署流程：**
+
+```
+用户首次注册 (微信授权 / 手机号)
+        │
+        ▼
+  注册页面底部：
+  ┌─────────────────────────────────────────┐
+  │ ☑ 我已阅读并同意                        │
+  │   《费用管家用户服务协议》(可点击查看全文) │
+  │   《费用管家隐私政策》(可点击查看全文)     │
+  └─────────────────────────────────────────┘
+        │
+        ▼
+  必须勾选同意才能完成注册
+        │
+        ▼
+  注册成功 → 记录签署记录 (两份协议各一条)
+  (记录：用户ID、协议类型、协议版本号、签署时间、签署IP、设备信息)
+```
+
+**历史版本查看：**
+
+用户可在「设置 → 关于 → 协议与政策」中：
+- 查看当前生效的用户协议和隐私政策全文
+- 查看历史版本列表（版本号 + 生效日期 + 变更摘要）
+- 查看任意历史版本的全文
+- 查看自己的协议签署记录（哪个版本、什么时间签的）
+
+#### 3.2.3 个人中心
 
 - 个人资料编辑（头像、昵称、公司名称、部门）
 - 会员状态展示（试用期/已付费/已过期）
 - 我的邀请（邀请记录、返佣统计）
-- 设置（通知偏好、默认补贴标准）
+- 设置（通知偏好、默认补贴标准、协议与政策）
 
 ### 3.3 费用管理模块
 
@@ -976,6 +1069,8 @@
 ### 4.1 ER 图概览
 
 ```
+用户(user) ──1:N── 协议签署记录(user_agreement_sign) ──N:1── 协议版本(agreement_version)
+    │
 用户(user) ──1:N── 费用记录(expense) ──N:1── 费用分类(expense_category)
     │                    │
     │                    N:1
@@ -1024,11 +1119,57 @@
 | monthly_invoice_used | INT | 本月已用发票上传次数 (免费版限额) |
 | monthly_reimburse_used | INT | 本月已用报销单次数 (免费版限额) |
 | default_subsidy | DECIMAL(10,2) | 默认补贴标准(元/天) |
+| agreement_version_id | BIGINT | 最后签署的用户协议版本ID |
+| privacy_version_id | BIGINT | 最后签署的隐私政策版本ID |
+| agreement_signed_at | DATETIME | 最后签署用户协议时间 |
+| privacy_signed_at | DATETIME | 最后签署隐私政策时间 |
 | status | TINYINT | 账号状态: 0正常 1禁用 |
 | created_at | DATETIME | 创建时间 |
 | updated_at | DATETIME | 更新时间 |
 
-#### 4.2.2 费用分类表 (t_expense_category)
+#### 4.2.2 协议版本表 (t_agreement_version)
+
+> 管理用户协议和隐私政策的所有版本，支持版本发布、生效、归档全生命周期。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 |
+| agreement_type | TINYINT | 协议类型: 1用户服务协议 2隐私政策 |
+| version_code | VARCHAR(10) | 版本号 (如: V1.0, V1.1, V2.0) |
+| version_seq | INT | 版本序号 (自增，用于比较新旧) |
+| title | VARCHAR(100) | 协议标题 |
+| content | LONGTEXT | 协议全文 (Markdown/HTML) |
+| change_level | TINYINT | 变更等级: 1普通变更 2重大变更 |
+| change_summary | VARCHAR(1000) | 变更摘要 (让用户快速了解改了什么) |
+| change_detail | TEXT | 详细变更说明 (逐条列出变更点) |
+| effective_date | DATETIME | 计划生效日期 |
+| publish_date | DATETIME | 发布日期 |
+| status | TINYINT | 状态: 0草稿 1待生效 2生效中 3已归档 |
+| notify_days_before | INT | 提前通知天数 (重大变更默认15天) |
+| created_by | BIGINT | 创建人 (管理员ID) |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
+
+#### 4.2.3 用户协议签署记录表 (t_user_agreement_sign)
+
+> INSERT-ONLY，记录每次用户签署/确认协议的完整凭证，不可修改不可删除，作为法律证据留存。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 |
+| user_id | BIGINT | 用户ID |
+| agreement_type | TINYINT | 协议类型: 1用户服务协议 2隐私政策 |
+| version_id | BIGINT | 签署的协议版本ID |
+| version_code | VARCHAR(10) | 签署的版本号 (冗余，方便查询) |
+| sign_action | TINYINT | 签署动作: 1首次注册签署 2更新后重新确认 |
+| sign_ip | VARCHAR(45) | 签署时IP地址 |
+| sign_device | VARCHAR(200) | 签署时设备信息 (型号+OS+浏览器) |
+| sign_platform | VARCHAR(20) | 签署平台: miniprogram/h5_mobile/h5_desktop |
+| user_agent | VARCHAR(500) | User-Agent |
+| data_sign | VARCHAR(64) | HMAC-SHA256 签名 (防篡改) |
+| created_at | DATETIME | 签署时间 |
+
+#### 4.2.4 费用分类表 (t_expense_category)
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -1452,6 +1593,28 @@
 | GET | `/user/profile` | 获取个人资料 |
 | PUT | `/user/profile` | 更新个人资料 |
 | GET | `/user/member-status` | 获取会员状态 |
+
+#### 协议版本管理模块
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/agreement/check` | 检查是否有新协议需要签署 (每次进入应用调用) |
+| GET | `/agreement/current/{type}` | 获取当前生效的协议全文 (type: 1用户协议 2隐私政策) |
+| POST | `/agreement/sign` | 用户签署/确认协议 |
+| GET | `/agreement/history/{type}` | 获取协议历史版本列表 |
+| GET | `/agreement/version/{id}` | 获取指定版本的协议全文 |
+| GET | `/agreement/my-signs` | 我的协议签署记录 |
+
+#### 协议管理 (仅管理员)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/admin/agreement/create` | 创建新版本协议 (草稿) |
+| PUT | `/admin/agreement/{id}` | 编辑协议草稿 |
+| POST | `/admin/agreement/{id}/publish` | 发布协议 (设定生效日期) |
+| GET | `/admin/agreement/list` | 协议版本列表 (含各状态) |
+| GET | `/admin/agreement/sign-stats` | 签署统计 (已签/未签人数) |
+| POST | `/admin/agreement/{id}/notify` | 手动推送通知给未签署用户 |
 
 #### 费用管理模块
 
@@ -2026,6 +2189,7 @@ expense-manager/
 │   │   │   └── ResultCode.java
 │   │   ├── interceptor/                 # 拦截器
 │   │   │   ├── AuthInterceptor.java
+│   │   │   ├── AgreementInterceptor.java # 协议签署拦截器 (检查是否有新协议未签署)
 │   │   │   └── MemberInterceptor.java
 │   │   ├── security/                    # 数据安全模块 (防篡改)
 │   │   │   ├── DataSignService.java      # HMAC-SHA256 行级签名计算与校验
@@ -2046,6 +2210,19 @@ expense-manager/
 │   │   ├── auth/                        # 认证模块
 │   │   │   ├── controller/
 │   │   │   ├── service/
+│   │   │   └── dto/
+│   │   │
+│   │   ├── agreement/                   # 协议版本管理模块
+│   │   │   ├── controller/
+│   │   │   │   ├── AgreementController.java      # 用户端协议接口
+│   │   │   │   └── AgreementAdminController.java  # 管理端协议管理
+│   │   │   ├── service/
+│   │   │   │   ├── AgreementVersionService.java   # 版本CRUD与生命周期
+│   │   │   │   ├── AgreementSignService.java      # 签署记录管理
+│   │   │   │   ├── AgreementCheckService.java     # 签署状态检查 (拦截器调用)
+│   │   │   │   └── AgreementNotifyService.java    # 协议更新通知推送
+│   │   │   ├── mapper/
+│   │   │   ├── entity/
 │   │   │   └── dto/
 │   │   │
 │   │   ├── user/                        # 用户模块
@@ -2173,6 +2350,8 @@ expense-manager/
 │   │       └── dto/
 │   │
 │   └── task/                           # 定时任务
+│       ├── AgreementEffectiveTask.java  # 协议生效检查 (到达生效日期→状态变更)
+│       ├── AgreementRemindTask.java    # 未签署用户提醒 (重大变更定期推送)
 │       ├── MemberExpireTask.java        # 会员到期检查 & 唤回券发放
 │       ├── ReimburseRemindTask.java     # 报销提醒
 │       ├── CommissionSettleTask.java    # 返佣结算 (付费7天后)
