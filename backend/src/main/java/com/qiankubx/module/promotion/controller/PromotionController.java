@@ -7,10 +7,12 @@ import com.qiankubx.module.promotion.entity.PromoterLevel;
 import com.qiankubx.module.promotion.service.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/promotion")
@@ -21,6 +23,7 @@ public class PromotionController {
     private final CommissionService commissionService;
     private final PointsService pointsService;
     private final PromoterLevelService promoterLevelService;
+    private final PosterService posterService;
 
     @GetMapping("/dashboard")
     public Result<DashboardVO> dashboard(HttpServletRequest request) {
@@ -77,5 +80,24 @@ public class PromotionController {
     public Result<LevelInfoVO> levelInfo(HttpServletRequest request) {
         Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
         return Result.ok(promoterLevelService.getLevelInfo(userId));
+    }
+
+    @GetMapping("/poster")
+    public Result<Map<String, Object>> poster(HttpServletRequest request,
+                                               @RequestParam(defaultValue = "invite") String type) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        return Result.ok(posterService.generateInvitePoster(userId));
+    }
+
+    @PostMapping("/poster/custom")
+    public Result<Map<String, Object>> customPoster(HttpServletRequest request,
+                                                     @RequestBody PosterCustomDTO dto) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        return Result.ok(posterService.generateSocialCard(userId, dto.getCardType()));
+    }
+
+    @Data
+    public static class PosterCustomDTO {
+        private String cardType;
     }
 }

@@ -46,4 +46,45 @@ public class AnalyticsDashboardController {
                                                      @RequestParam String endDate) {
         return Result.ok(dashboardService.getErrorList(startDate, endDate));
     }
+
+    @GetMapping("/funnel")
+    public Result<Map<String, Object>> funnel(@RequestParam String type,
+                                               @RequestParam String startDate,
+                                               @RequestParam String endDate) {
+        return Result.ok(dashboardService.getFunnelAnalysis(type, startDate, endDate));
+    }
+
+    @GetMapping("/retention")
+    public Result<Map<String, Object>> retention(@RequestParam String startDate) {
+        return Result.ok(dashboardService.getRetentionAnalysis(startDate));
+    }
+
+    @GetMapping("/performance")
+    public Result<List<Map<String, Object>>> performance(@RequestParam String startDate,
+                                                          @RequestParam String endDate) {
+        return Result.ok(dashboardService.getPerformanceReport(startDate, endDate));
+    }
+
+    @GetMapping("/user-segments")
+    public Result<List<Map<String, Object>>> userSegments() {
+        return Result.ok(dashboardService.getUserSegments());
+    }
+
+    @GetMapping("/conversion")
+    public Result<List<Map<String, Object>>> conversion(@RequestParam String startDate,
+                                                         @RequestParam String endDate) {
+        return Result.ok(dashboardService.getConversionEffect(startDate, endDate));
+    }
+
+    @GetMapping("/time-distribution")
+    public Result<List<Map<String, Object>>> timeDistribution(@RequestParam String startDate,
+                                                               @RequestParam String endDate) {
+        return Result.ok(dashboardService.getTimeDistribution(startDate, endDate));
+    }
+
+    @GetMapping("/path")
+    public Result<List<Map<String, Object>>> path(@RequestParam String startDate,
+                                                   @RequestParam String endDate) {
+        return Result.ok(dashboardService.getPathAnalysis(startDate, endDate));
+    }
 }

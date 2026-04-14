@@ -235,6 +235,48 @@ public class MemberService {
         return orders.stream().map(this::toOrderVO).toList();
     }
 
+    @Transactional(rollbackFor = Exception.class)
+    public void applyRefund(Long userId, String orderNo) {
+        MemberOrder order = memberOrderMapper.selectOne(
+                new LambdaQueryWrapper<MemberOrder>()
+                        .eq(MemberOrder::getUserId, userId)
+                        .eq(MemberOrder::getOrderNo, orderNo)
+        );
+        if (order == null) {
+            throw new BizException(ResultCode.NOT_FOUND.getCode(), "订单不存在");
+        }
+        if (order.getPayStatus() != 1) {
+            throw new BizException(400, "订单未支付，无法退款");
+        }
+        if (order.getRefundStatus() != null && order.getRefundStatus() != 0) {
+            throw new BizException(400, "退款已处理");
+        }
+        if (order.getPayTime() != null && order.getPayTime().plusDays(7).isBefore(LocalDateTime.now())) {
+            throw new BizException(400, "已超过7天退款期限");
+        }
+
+        order.setRefundStatus(2);
+        order.setRefundTime(LocalDateTime.now());
+        order.setUpdatedAt(LocalDateTime.now());
+        memberOrderMapper.updateById(order);
+
+        userMapper.update(null, new LambdaUpdateWrapper<User>()
+                .eq(User::getId, userId)
+                .set(User::getMemberType, 0)
+                .set(User::getMemberStatus, 0)
+                .set(User::getMemberExpireTime, null)
+                .set(User::getUpdatedAt, LocalDateTime.now())
+        );
+
+        try {
+            commissionService.revokeCommission(order.getId());
+        } catch (Exception e) {
+            log.error("退款撤销返佣失败: orderId={}", order.getId(), e);
+        }
+
+        log.info("退款成功: userId={}, orderNo={}", userId, orderNo);
+    }
+
     private BigDecimal getPlanPrice(Integer planType) {
         return switch (planType) {
             case 1 -> MONTHLY_PRICE;

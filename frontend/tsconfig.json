@@ -18,6 +18,7 @@
   },
   "references": [
     { "path": "./packages/shared" },
-    { "path": "./packages/mobile" }
+    { "path": "./packages/mobile" },
+    { "path": "./packages/desktop" }
   ]
 }

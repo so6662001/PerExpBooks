@@ -15,8 +15,12 @@ public class RabbitMQConfig {
     public static final String EXCHANGE_QIANKU = "qianku.exchange";
     public static final String QUEUE_EMAIL = "qianku.queue.email";
     public static final String QUEUE_PDF = "qianku.queue.pdf";
+    public static final String QUEUE_INVOICE_PARSE = "qianku.queue.invoice.parse";
+    public static final String QUEUE_PAY_SUCCESS = "qianku.queue.pay.success";
     public static final String ROUTING_EMAIL = "qianku.routing.email";
     public static final String ROUTING_PDF = "qianku.routing.pdf";
+    public static final String ROUTING_INVOICE_PARSE = "qianku.routing.invoice.parse";
+    public static final String ROUTING_PAY_SUCCESS = "qianku.routing.pay.success";
 
     @Bean
     public MessageConverter jackson2JsonMessageConverter() {
@@ -46,5 +50,25 @@ public class RabbitMQConfig {
     @Bean
     public Binding pdfBinding(Queue pdfQueue, DirectExchange qiankuExchange) {
         return BindingBuilder.bind(pdfQueue).to(qiankuExchange).with(ROUTING_PDF);
+    }
+
+    @Bean
+    public Queue invoiceParseQueue() {
+        return new Queue(QUEUE_INVOICE_PARSE, true);
+    }
+
+    @Bean
+    public Queue paySuccessQueue() {
+        return new Queue(QUEUE_PAY_SUCCESS, true);
+    }
+
+    @Bean
+    public Binding invoiceParseBinding(Queue invoiceParseQueue, DirectExchange qiankuExchange) {
+        return BindingBuilder.bind(invoiceParseQueue).to(qiankuExchange).with(ROUTING_INVOICE_PARSE);
+    }
+
+    @Bean
+    public Binding paySuccessBinding(Queue paySuccessQueue, DirectExchange qiankuExchange) {
+        return BindingBuilder.bind(paySuccessQueue).to(qiankuExchange).with(ROUTING_PAY_SUCCESS);
     }
 }

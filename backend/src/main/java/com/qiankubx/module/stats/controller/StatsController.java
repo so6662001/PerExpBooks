@@ -5,6 +5,7 @@ import com.qiankubx.common.response.Result;
 import com.qiankubx.module.stats.service.StatsService;
 import com.qiankubx.module.stats.vo.*;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -53,5 +54,27 @@ public class StatsController {
                                                                   @RequestParam(required = false) Integer year) {
         Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
         return Result.ok(statsService.getReimburseProgress(userId, year));
+    }
+
+    @GetMapping("/yearly-compare")
+    public Result<List<YearlyCompareVO>> getYearlyCompare(HttpServletRequest request,
+                                                           @RequestParam(required = false) Integer year) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        return Result.ok(statsService.getYearlyCompare(userId, year));
+    }
+
+    @GetMapping("/city-ranking")
+    public Result<List<CityStats>> getCityRanking(HttpServletRequest request,
+                                                   @RequestParam(required = false) Integer year) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        return Result.ok(statsService.getCityRankingByYear(userId, year));
+    }
+
+    @GetMapping("/export")
+    public void exportExcel(HttpServletRequest request, HttpServletResponse response,
+                            @RequestParam(required = false) String startDate,
+                            @RequestParam(required = false) String endDate) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        statsService.exportExcel(userId, startDate, endDate, response);
     }
 }

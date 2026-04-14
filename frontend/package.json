@@ -5,6 +5,8 @@
   "scripts": {
     "dev:mobile": "pnpm --filter @qianku/mobile dev",
     "build:mobile": "pnpm --filter @qianku/mobile build",
+    "dev:desktop": "pnpm --filter @qianku/desktop dev",
+    "build:desktop": "pnpm --filter @qianku/desktop build",
     "dev": "pnpm dev:mobile"
   },
   "engines": {

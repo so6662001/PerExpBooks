@@ -12,12 +12,12 @@ import com.qiankubx.module.user.entity.User;
 import com.qiankubx.module.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -27,6 +27,7 @@ public class TeamService {
     private final TeamMapper teamMapper;
     private final TeamMemberMapper teamMemberMapper;
     private final UserMapper userMapper;
+    private final JdbcTemplate jdbcTemplate;
 
     @Transactional(rollbackFor = Exception.class)
     public TeamVO createTeam(Long userId, String name) {
@@ -218,6 +219,53 @@ public class TeamService {
             vo.setJoinedAt(m.getJoinedAt());
             return vo;
         }).toList();
+    }
+
+    public Map<String, Object> getTeamStats(Long userId) {
+        TeamMember membership = teamMemberMapper.selectOne(
+                new LambdaQueryWrapper<TeamMember>()
+                        .eq(TeamMember::getUserId, userId)
+                        .eq(TeamMember::getStatus, 0)
+        );
+        if (membership == null) {
+            throw new BizException(400, "您未加入任何团队");
+        }
+
+        Long teamId = membership.getTeamId();
+        List<TeamMember> members = teamMemberMapper.selectList(
+                new LambdaQueryWrapper<TeamMember>()
+                        .eq(TeamMember::getTeamId, teamId)
+                        .eq(TeamMember::getStatus, 0)
+        );
+        List<Long> memberUserIds = members.stream().map(TeamMember::getUserId).toList();
+
+        if (memberUserIds.isEmpty()) {
+            Map<String, Object> emptyResult = new LinkedHashMap<>();
+            emptyResult.put("memberCount", 0);
+            return emptyResult;
+        }
+
+        String inClause = memberUserIds.stream()
+                .map(String::valueOf)
+                .reduce((a, b) -> a + "," + b).orElse("0");
+
+        Map<String, Object> expenseStats = jdbcTemplate.queryForMap(
+                "SELECT COALESCE(SUM(amount), 0) AS totalExpense, " +
+                        "COALESCE(SUM(CASE WHEN reimburse_status = 2 THEN amount ELSE 0 END), 0) AS reimbursed, " +
+                        "COALESCE(SUM(CASE WHEN reimburse_status != 2 THEN amount ELSE 0 END), 0) AS pendingReimburse " +
+                        "FROM t_expense WHERE user_id IN (" + inClause + ") AND status = 0");
+
+        Integer tripDays = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(DATEDIFF(COALESCE(end_date, start_date), start_date) + 1), 0) " +
+                        "FROM t_business_trip WHERE user_id IN (" + inClause + ") AND status = 0", Integer.class);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("memberCount", memberUserIds.size());
+        result.put("totalExpense", expenseStats.get("totalExpense"));
+        result.put("reimbursed", expenseStats.get("reimbursed"));
+        result.put("pendingReimburse", expenseStats.get("pendingReimburse"));
+        result.put("totalTripDays", tripDays != null ? tripDays : 0);
+        return result;
     }
 
     private TeamMember getAdminMembership(Long userId) {

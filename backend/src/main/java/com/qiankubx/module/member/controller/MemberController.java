@@ -68,4 +68,11 @@ public class MemberController {
         Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
         return Result.ok(memberService.listOrders(userId));
     }
+
+    @PostMapping("/refund/{orderNo}")
+    public Result<Void> refund(HttpServletRequest request, @PathVariable String orderNo) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        memberService.applyRefund(userId, orderNo);
+        return Result.ok();
+    }
 }

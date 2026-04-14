@@ -58,4 +58,10 @@ public class TeamController {
         Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
         return Result.ok(teamService.listMembers(userId));
     }
+
+    @GetMapping("/stats")
+    public Result<java.util.Map<String, Object>> stats(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        return Result.ok(teamService.getTeamStats(userId));
+    }
 }
