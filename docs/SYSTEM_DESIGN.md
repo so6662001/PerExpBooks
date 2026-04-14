@@ -1080,6 +1080,7 @@
 | expense_date | DATE | 费用日期 |
 | reimburse_status | TINYINT | 报销状态: 0待报销 1已提交 2已收款 |
 | reimbursement_id | BIGINT | 所属报销单ID |
+| data_sign | VARCHAR(64) | HMAC-SHA256 行级签名 (覆盖金额+状态) |
 | status | TINYINT | 状态: 0正常 1删除 |
 | created_at | DATETIME | 创建时间 |
 | updated_at | DATETIME | 更新时间 |
@@ -1133,6 +1134,7 @@
 | is_renewal | TINYINT | 是否续费: 0否 1是 |
 | refund_status | TINYINT | 退款状态: 0无 1申请中 2已退款 |
 | refund_time | DATETIME | 退款时间 |
+| data_sign | VARCHAR(64) | HMAC-SHA256 行级签名 (覆盖金额+状态) |
 | created_at | DATETIME | 创建时间 |
 | updated_at | DATETIME | 更新时间 |
 
@@ -1156,6 +1158,8 @@
 
 #### 4.2.8 返佣记录表 (t_commission)
 
+> 防篡改：INSERT-ONLY，应用账户无 UPDATE/DELETE 权限。状态变更通过新增撤销记录实现。
+
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | BIGINT | 主键 |
@@ -1166,6 +1170,7 @@
 | amount | DECIMAL(10,2) | 返佣金额 |
 | status | TINYINT | 状态: 0待结算 1已结算 2已撤销(退款导致) |
 | settle_time | DATETIME | 结算时间 (付费后7天无退款自动结算) |
+| data_sign | VARCHAR(64) | HMAC-SHA256 行级签名 |
 | created_at | DATETIME | 创建时间 |
 
 #### 4.2.9 优惠券模板表 (t_coupon_template)
@@ -1202,6 +1207,9 @@
 
 #### 4.2.11 推广大使等级表 (t_promoter_level)
 
+> 防篡改：积分和余额核心表，所有变更必须通过流水驱动，每次变更重新计算行级签名。
+> 定时对账任务校验：points == SUM(points_log)，available_balance == SUM(已结算返佣) - SUM(已完成提现)。
+
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | BIGINT | 主键 |
@@ -1216,10 +1224,16 @@
 | total_points | INT | 累计获得积分 |
 | level1_rate | DECIMAL(10,2) | 一级返佣金额 (随等级变化) |
 | level2_rate | DECIMAL(10,2) | 二级返佣金额 (随等级变化) |
+| data_sign | VARCHAR(64) | HMAC-SHA256 行级签名 (覆盖积分+余额+等级) |
+| sign_version | INT | 签名版本号 (密钥轮换时递增) |
+| last_reconcile_at | DATETIME | 上次对账通过时间 |
 | updated_at | DATETIME | 更新时间 |
 | created_at | DATETIME | 创建时间 |
 
 #### 4.2.12 积分流水表 (t_points_log)
+
+> 防篡改：INSERT-ONLY，应用账户无 UPDATE/DELETE 权限。
+> 每条记录包含前一条记录的哈希（链式哈希），任何删除或插入伪造记录都会导致链断裂。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -1230,9 +1244,14 @@
 | balance_after | INT | 变动后余额 |
 | ref_id | BIGINT | 关联ID (邀请记录ID/兑换记录ID等) |
 | remark | VARCHAR(200) | 备注 |
+| prev_hash | VARCHAR(64) | 前一条流水的 chain_hash (链式哈希) |
+| chain_hash | VARCHAR(64) | 本条记录的链式哈希 SHA256(id+user_id+points+balance_after+action+prev_hash+created_at) |
+| data_sign | VARCHAR(64) | HMAC-SHA256 行级签名 |
 | created_at | DATETIME | 创建时间 |
 
 #### 4.2.13 提现记录表 (t_withdrawal)
+
+> 防篡改：提现金额和状态受行级签名保护，状态变更写入审计日志。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -1240,11 +1259,12 @@
 | user_id | BIGINT | 用户ID |
 | amount | DECIMAL(10,2) | 提现金额 |
 | withdraw_type | TINYINT | 提现方式: 1微信 2支付宝 |
-| account_info | VARCHAR(200) | 收款账号信息 (加密存储) |
+| account_info | VARCHAR(200) | 收款账号信息 (AES加密存储) |
 | status | TINYINT | 状态: 0申请中 1处理中 2已到账 3已拒绝 |
 | reject_reason | VARCHAR(200) | 拒绝原因 |
 | trade_no | VARCHAR(64) | 转账交易号 |
 | completed_at | DATETIME | 完成时间 |
+| data_sign | VARCHAR(64) | HMAC-SHA256 行级签名 |
 | created_at | DATETIME | 创建时间 |
 
 #### 4.2.14 团队表 (t_team)
@@ -1273,7 +1293,28 @@
 | joined_at | DATETIME | 加入时间 |
 | status | TINYINT | 状态: 0正常 1已退出 |
 
-#### 4.2.16 分享行为记录表 (t_share_log)
+#### 4.2.16 审计日志表 (t_audit_log)
+
+> INSERT-ONLY，应用账户无 UPDATE/DELETE 权限，所有关键数据变更自动写入。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 (自增) |
+| operator_id | BIGINT | 操作者ID |
+| operator_type | VARCHAR(10) | 操作者类型: user/system/admin |
+| target_table | VARCHAR(50) | 操作的表名 |
+| target_id | BIGINT | 操作的记录ID |
+| action | VARCHAR(10) | 操作类型: insert/update |
+| field_name | VARCHAR(50) | 变更字段名 |
+| old_value | VARCHAR(500) | 变更前值 |
+| new_value | VARCHAR(500) | 变更后值 |
+| ip_address | VARCHAR(45) | 操作来源IP |
+| user_agent | VARCHAR(300) | 操作来源UA |
+| request_id | VARCHAR(36) | 请求追踪ID (UUID) |
+| log_sign | VARCHAR(64) | HMAC-SHA256 审计日志签名 |
+| created_at | DATETIME | 创建时间 |
+
+#### 4.2.17 分享行为记录表 (t_share_log)
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -1423,6 +1464,18 @@
 | POST | `/withdrawal/apply` | 申请提现 (满¥50起提) |
 | GET | `/withdrawal/records` | 提现记录列表 |
 | GET | `/withdrawal/balance` | 可提现余额 & 冻结余额 |
+
+#### 安全审计模块 (仅管理员)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/admin/audit/logs` | 审计日志查询 (按表/用户/时间筛选) |
+| POST | `/admin/audit/reconcile` | 手动触发全量对账 |
+| GET | `/admin/audit/reconcile-report` | 获取最近一次对账报告 |
+| GET | `/admin/audit/tamper-alerts` | 篡改告警记录列表 |
+| POST | `/admin/audit/verify-sign/{table}/{id}` | 校验指定记录的行级签名 |
+| POST | `/admin/audit/verify-chain/{userId}` | 校验指定用户的流水链式哈希 |
+| GET | `/admin/audit/anomaly-users` | 异常用户列表 (积分/余额异常) |
 
 ---
 
@@ -1854,6 +1907,15 @@ expense-manager/
 │   │   ├── interceptor/                 # 拦截器
 │   │   │   ├── AuthInterceptor.java
 │   │   │   └── MemberInterceptor.java
+│   │   ├── security/                    # 数据安全模块 (防篡改)
+│   │   │   ├── DataSignService.java      # HMAC-SHA256 行级签名计算与校验
+│   │   │   ├── ChainHashService.java     # 链式哈希生成与校验
+│   │   │   ├── ReconcileService.java     # 流水对账 (余额=SUM(流水))
+│   │   │   ├── AuditLogService.java      # 审计日志写入 (AOP拦截)
+│   │   │   ├── TamperAlertService.java   # 篡改告警 (短信+邮件+企业微信)
+│   │   │   ├── KeyManager.java           # 签名密钥管理 (轮换/多版本)
+│   │   │   └── AuditAspect.java          # AOP切面：自动拦截关键表变更写审计日志
+│   │   │
 │   │   └── util/                        # 工具类
 │   │       ├── JwtUtil.java
 │   │       ├── InvoiceParser.java
@@ -1979,7 +2041,10 @@ expense-manager/
 │       ├── CommissionSettleTask.java    # 返佣结算 (付费7天后)
 │       ├── CouponExpireTask.java        # 优惠券过期处理
 │       ├── MonthlyQuotaResetTask.java   # 免费版月度额度重置
-│       └── PromoterLevelUpgradeTask.java # 推广等级自动晋升
+│       ├── PromoterLevelUpgradeTask.java # 推广等级自动晋升
+│       ├── DataReconcileTask.java       # 数据对账 (每小时: 余额==SUM(流水))
+│       ├── SignVerifyTask.java          # 签名巡检 (每日: 抽检行级签名)
+│       └── ChainHashVerifyTask.java     # 链式哈希巡检 (每日: 检测链断裂)
 │
 ├── src/main/resources/
 │   ├── application.yml
@@ -2025,6 +2090,8 @@ docker-compose.yml
 
 ## 九、安全设计
 
+### 9.1 基础安全防护
+
 | 安全项 | 措施 |
 |--------|------|
 | 接口认证 | JWT Token + Refresh Token 双 Token 机制 |
@@ -2035,6 +2102,230 @@ docker-compose.yml
 | XSS 防护 | 输入输出转义，CSP 策略 |
 | 支付安全 | 签名验证、幂等处理、金额二次校验 |
 | 数据隔离 | 用户数据严格按 user_id 隔离 |
+
+### 9.2 数据防篡改体系（核心安全）
+
+> **设计目标**：即使黑客获得了数据库访问权限，也无法直接修改积分、余额、返佣等关键数据而不被发现。
+> 采用 **「行级数据签名 + 流水账本 + 余额校验 + 变更审计 + 异常告警」** 五层纵深防御。
+
+#### 9.2.1 行级数据签名（防直接篡改数据库记录）
+
+**原理**：对每一行关键数据，使用服务器端密钥计算 HMAC-SHA256 签名，存储在同一行的 `data_sign` 字段中。每次读取数据时自动校验签名，签名不匹配则判定数据被篡改。
+
+```
+签名算法：
+data_sign = HMAC-SHA256(server_secret_key, 签名素材)
+
+签名素材 = 将行中所有关键字段拼接为固定格式字符串
+```
+
+**需要签名保护的表及签名素材：**
+
+| 表 | 签名素材字段 | 说明 |
+|----|------------|------|
+| t_promoter_level (推广大使) | `user_id + points + total_points + available_balance + frozen_balance + total_withdrawn + total_commission + level + updated_at` | 积分余额和返佣余额核心表 |
+| t_points_log (积分流水) | `id + user_id + points + balance_after + action + ref_id + created_at` | 每一笔积分变动不可被篡改 |
+| t_commission (返佣记录) | `id + user_id + amount + commission_type + order_id + invitation_id + status + created_at` | 每一笔返佣不可被篡改 |
+| t_withdrawal (提现记录) | `id + user_id + amount + status + created_at` | 提现金额和状态不可被篡改 |
+| t_member_order (会员订单) | `id + user_id + pay_amount + plan_type + pay_status + pay_time + created_at` | 支付金额和状态不可被篡改 |
+| t_user_coupon (用户优惠券) | `id + user_id + discount_amount + use_status + created_at` | 优惠券面额不可被篡改 |
+| t_expense (费用记录) | `id + user_id + amount + reimburse_status + created_at` | 费用金额不可被篡改 |
+
+**实现细节：**
+
+```java
+// 签名生成（写入/更新数据时调用）
+String signPayload = userId + "|" + points + "|" + totalPoints + "|"
+    + availableBalance + "|" + frozenBalance + "|" + updatedAt;
+String dataSign = HmacSHA256(SERVER_SECRET_KEY, signPayload);
+
+// 签名校验（读取数据时调用）
+String expectedSign = HmacSHA256(SERVER_SECRET_KEY, rebuildPayload(record));
+if (!expectedSign.equals(record.getDataSign())) {
+    // 签名不匹配 → 数据被篡改！
+    triggerTamperAlert(record);  // 触发告警
+    throw new DataTamperException("数据完整性校验失败");
+}
+```
+
+**密钥管理：**
+- 签名密钥 `SERVER_SECRET_KEY` 不存储在数据库中，仅存储在应用配置中心或环境变量
+- 密钥定期轮换（建议每季度），轮换时对历史数据批量重新签名
+- 密钥分为主密钥和备用密钥，支持平滑过渡
+
+#### 9.2.2 流水账本机制（防凭空增加/删除记录）
+
+**原理**：积分和余额不依赖单一字段存储，而是通过流水记录实时计算和校验。所有变动必须有对应的流水记录，余额 = 全部流水之和。
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                   流水账本校验机制                             │
+│                                                              │
+│  积分余额校验：                                               │
+│  t_promoter_level.points                                     │
+│    == SUM(t_points_log.points WHERE user_id = ?)             │
+│                                                              │
+│  可提现余额校验：                                             │
+│  t_promoter_level.available_balance                          │
+│    == SUM(已结算返佣) - SUM(已完成提现)                        │
+│    == SUM(t_commission.amount WHERE status=1)                │
+│       - SUM(t_withdrawal.amount WHERE status=2)              │
+│                                                              │
+│  冻结余额校验：                                               │
+│  t_promoter_level.frozen_balance                             │
+│    == SUM(t_commission.amount WHERE status=0)                │
+│                                                              │
+│  如果任一等式不成立 → 数据被篡改 → 触发告警                    │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**定时对账任务**：每小时自动运行，逐用户校验余额等式。
+
+**流水不可删除**：流水表使用逻辑删除（不可物理删除），MySQL 数据库账户对流水表仅有 INSERT 和 SELECT 权限，无 DELETE 和 UPDATE 权限（通过数据库权限控制）。
+
+#### 9.2.3 流水链式哈希（防删除/插入伪造流水）
+
+**原理**：每条流水记录包含前一条流水的哈希值，形成区块链式的链式结构。如果中间任何一条被删除或篡改，后续所有记录的链式哈希都会断裂。
+
+```
+流水记录 #1                流水记录 #2                流水记录 #3
+┌──────────────┐          ┌──────────────┐          ┌──────────────┐
+│ id: 1001     │          │ id: 1002     │          │ id: 1003     │
+│ points: +20  │          │ points: -50  │          │ points: +5   │
+│ balance: 20  │          │ balance: -30 │          │ balance: -25 │
+│ prev_hash:   │──────────│ prev_hash:   │──────────│ prev_hash:   │
+│  "000000"    │          │  "a3f2c1..." │          │  "b7d4e9..." │
+│ chain_hash:  │          │ chain_hash:  │          │ chain_hash:  │
+│  "a3f2c1..." │          │  "b7d4e9..." │          │  "c1e8f2..." │
+└──────────────┘          └──────────────┘          └──────────────┘
+
+chain_hash = SHA256(id + user_id + points + balance_after + action + prev_hash + created_at)
+```
+
+**校验方式**：从第一条流水开始，依次验证每条记录的 `prev_hash` 是否等于上一条的 `chain_hash`，任何断裂即为篡改。
+
+#### 9.2.4 关键操作双重校验
+
+**原理**：所有涉及积分变动、余额变动、返佣计算的操作，在业务层和数据库层实施双重校验。
+
+```
+积分增加流程（以「邀请注册得5积分」为例）：
+
+步骤1：业务校验
+  · 校验邀请关系是否真实存在
+  · 校验被邀请人是否确实刚完成注册
+  · 校验该邀请是否已经发过积分（幂等性）
+  · 校验当前用户积分签名是否有效
+
+步骤2：数据库事务（原子操作）
+  BEGIN TRANSACTION;
+    · 读取当前积分余额并校验签名
+    · 插入积分流水记录（含 prev_hash 链式哈希）
+    · 更新余额 = 原余额 + 变动值
+    · 重新计算并更新数据签名
+    · 校验 新余额 == SUM(全部流水)
+  COMMIT;
+
+步骤3：异步对账
+  · 将本次变动事件发送至消息队列
+  · 对账服务异步校验余额等式
+```
+
+**返佣计算防篡改：**
+
+```
+返佣金额不由前端传入，而是服务端根据以下要素实时计算：
+
+返佣金额 = f(推广大使等级, 返佣类型, 被推荐人订单金额)
+
+计算过程：
+1. 从 t_promoter_level 读取推广等级 → 校验签名
+2. 从 t_member_order 读取订单金额 → 校验签名
+3. 根据等级确定返佣比例（硬编码在代码中，非数据库配置）
+4. 计算返佣金额
+5. 写入 t_commission + 计算签名
+```
+
+#### 9.2.5 变更审计日志
+
+**原理**：所有关键数据的变更（无论来源）都记录在独立的审计日志表中，审计日志表为追加写入（Append-Only），应用层账户无 UPDATE/DELETE 权限。
+
+```
+审计日志记录内容：
+┌──────────────────────────────────────────────────────────────┐
+│  审计日志 (t_audit_log)                                      │
+│                                                              │
+│  · 谁操作的：operator_id, operator_type(user/system/admin)   │
+│  · 操作了什么：target_table, target_id, action(insert/update)│
+│  · 改了哪些字段：field_name, old_value, new_value            │
+│  · 从哪里操作的：ip_address, user_agent, request_id          │
+│  · 什么时候：created_at                                      │
+│  · 防篡改签名：log_sign = HMAC-SHA256(...)                   │
+│                                                              │
+│  覆盖范围：                                                   │
+│  · t_promoter_level 的任何字段变更                            │
+│  · t_points_log 的插入                                       │
+│  · t_commission 的插入和状态变更                              │
+│  · t_withdrawal 的插入和状态变更                              │
+│  · t_member_order 的支付状态变更                              │
+│  · t_user 的会员状态和余额字段变更                            │
+│  · t_expense 的金额和报销状态变更                             │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### 9.2.6 实时异常检测与告警
+
+| 检测项 | 规则 | 告警级别 |
+|--------|------|---------|
+| 数据签名不匹配 | 任何记录签名校验失败 | **紧急** - 立即推送管理员 + 自动冻结该用户资金操作 |
+| 余额等式不平衡 | 余额 ≠ SUM(流水) | **紧急** - 立即推送管理员 + 自动冻结 |
+| 链式哈希断裂 | 流水的 prev_hash 链路断裂 | **紧急** - 立即推送管理员 |
+| 审计日志异常 | 出现无审计日志的数据变更 | **严重** - 推送管理员 |
+| 积分异常增长 | 单用户单日积分增长 > 100 | **警告** - 进入人工审核队列 |
+| 余额异常增长 | 单用户单日可提现余额增长 > ¥500 | **警告** - 进入人工审核队列 |
+| 高频操作 | 单用户1分钟内积分操作 > 10次 | **警告** - 临时限流 |
+| 数据库直连告警 | 检测到非应用账号的SQL操作 | **紧急** - 推送管理员 |
+
+**告警通道**：短信 + 邮件 + 企业微信/钉钉群机器人，确保管理员及时收到。
+
+#### 9.2.7 数据库权限最小化
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│              数据库账户权限隔离                                │
+│                                                              │
+│  账户1：app_readwrite (应用主账户)                            │
+│  · 普通业务表：SELECT, INSERT, UPDATE                        │
+│  · 流水表(points_log/commission/audit_log)：SELECT, INSERT   │
+│    (无 UPDATE, 无 DELETE → 流水不可修改不可删除)              │
+│                                                              │
+│  账户2：app_readonly (只读账户，用于统计/对账)                │
+│  · 所有表：SELECT                                            │
+│                                                              │
+│  账户3：dba_admin (DBA管理，日常禁用)                        │
+│  · 仅在运维窗口期启用，需二人同时授权                        │
+│  · 所有操作记录到独立审计系统                                │
+│                                                              │
+│  注意：                                                       │
+│  · 禁止在任何账户上使用 TRUNCATE 和 DROP 权限                │
+│  · 生产环境禁止直连数据库执行 UPDATE/DELETE                  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### 9.2.8 防篡改体系总览
+
+```
+五层纵深防御：
+
+第1层 [行级签名]     →  每行数据有 HMAC 签名，直接改库立即被发现
+第2层 [流水账本]     →  余额由流水实时推算，凭空改余额立即被发现
+第3层 [链式哈希]     →  流水之间链式关联，删除/插入伪造流水立即被发现
+第4层 [审计日志]     →  所有变更有迹可循，事后可追溯完整操作链路
+第5层 [实时告警]     →  异常行为秒级检测，自动冻结 + 通知管理员
+
+任何一层被突破，其他层仍然可以检测到异常。
+黑客必须同时突破全部5层防御才能成功篡改数据而不被发现。
+```
 
 ---
 
