@@ -1,0 +1,14 @@
+{
+  "name": "qianku-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:mobile": "pnpm --filter @qianku/mobile dev",
+    "build:mobile": "pnpm --filter @qianku/mobile build",
+    "dev": "pnpm dev:mobile"
+  },
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=8"
+  }
+}
