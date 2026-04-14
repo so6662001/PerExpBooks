@@ -52,22 +52,14 @@ async function handleSubscribe(plan: MemberPlanVO) {
         <span class="status-icon">👑</span>
         <div class="status-info">
           <div class="status-title">
-            {{ userStore.memberStatus?.isMember ? userStore.memberStatus.level + ' 会员' : '未开通会员' }}
+            {{ userStore.memberStatus?.memberStatus === 1 ? '会员' : '未开通会员' }}
           </div>
-          <div v-if="userStore.memberStatus?.isMember" class="status-expire">
-            到期时间：{{ userStore.memberStatus?.expireAt }}
+          <div v-if="userStore.memberStatus?.memberStatus === 1" class="status-expire">
+            到期时间：{{ userStore.memberStatus?.memberExpireTime }}
           </div>
-        </div>
-      </div>
-      <div v-if="userStore.memberStatus?.isMember" class="quota-info">
-        <div class="quota-bar">
-          <div
-            class="quota-fill"
-            :style="{ width: `${((userStore.memberStatus?.usedQuota || 0) / (userStore.memberStatus?.monthlyQuota || 1)) * 100}%` }"
-          />
-        </div>
-        <div class="quota-text">
-          本月已用 {{ userStore.memberStatus?.usedQuota }} / {{ userStore.memberStatus?.monthlyQuota }} 次
+          <div v-else-if="userStore.memberStatus?.isTrial" class="status-expire">
+            试用到期：{{ userStore.memberStatus?.trialEndTime }}
+          </div>
         </div>
       </div>
     </div>
@@ -103,7 +95,7 @@ async function handleSubscribe(plan: MemberPlanVO) {
             :loading="ordering"
             @click="handleSubscribe(plan)"
           >
-            {{ userStore.memberStatus?.isMember ? '续费' : '开通' }}
+            {{ userStore.memberStatus?.memberStatus === 1 ? '续费' : '开通' }}
           </van-button>
         </div>
       </div>

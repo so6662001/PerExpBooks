@@ -87,7 +87,7 @@
         <div class="header-right">
           <el-dropdown trigger="click" @command="handleCommand">
             <div class="user-info">
-              <el-avatar :size="32" :src="userStore.userInfo?.avatar">
+              <el-avatar :size="32" :src="userStore.userInfo?.avatarUrl">
                 {{ userStore.userInfo?.nickname?.charAt(0) || 'U' }}
               </el-avatar>
               <span class="username">{{ userStore.userInfo?.nickname || '用户' }}</span>

@@ -2,18 +2,18 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { getLatestAgreement, formatDate } from '@qianku/shared'
-import type { AgreementVO } from '@qianku/shared'
+import { getCurrentAgreement, formatDate } from '@qianku/shared'
+import type { AgreementVersionVO } from '@qianku/shared'
 
 defineOptions({ name: 'AgreementIndex' })
 
 const router = useRouter()
 const loading = ref(true)
-const agreement = ref<AgreementVO | null>(null)
+const agreement = ref<AgreementVersionVO | null>(null)
 
 onMounted(async () => {
   try {
-    agreement.value = await getLatestAgreement()
+    agreement.value = await getCurrentAgreement('user_agreement')
   } catch (e: any) {
     showToast(e.message || '加载失败')
   } finally {
@@ -39,7 +39,7 @@ function goDetail(id: string) {
           <div class="agreement-info">
             <div class="agreement-title">{{ agreement.title }}</div>
             <div class="agreement-meta">
-              版本 {{ agreement.version }} · 生效时间 {{ formatDate(agreement.effectiveAt) }}
+              版本 {{ agreement.versionCode }} · 生效时间 {{ formatDate(agreement.effectiveAt) }}
             </div>
           </div>
           <van-icon name="arrow" color="#c8c8c8" />

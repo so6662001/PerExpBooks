@@ -39,6 +39,8 @@ public class ReimbursementService {
 
     @Transactional(rollbackFor = Exception.class)
     public ReimbursementVO generate(Long userId, ReimbursementCreateDTO dto) {
+        checkReimburseQuota(userId);
+
         List<Expense> expenses = validateAndGetExpenses(userId, dto.getExpenseIds());
 
         BigDecimal totalAmount = expenses.stream()
@@ -80,6 +82,8 @@ public class ReimbursementService {
         reimbursement.setMergedPdfUrl(mergedUrl);
 
         reimbursementMapper.updateById(reimbursement);
+
+        incrementReimburseUsed(userId);
 
         return toVO(reimbursement, expenses);
     }
@@ -225,6 +229,25 @@ public class ReimbursementService {
         reimbursement.setEmailSentAt(LocalDateTime.now());
         reimbursement.setUpdatedAt(LocalDateTime.now());
         reimbursementMapper.updateById(reimbursement);
+    }
+
+    private void checkReimburseQuota(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user != null && (user.getMemberStatus() == null || user.getMemberStatus() == 0)) {
+            if (user.getMonthlyReimburseUsed() != null && user.getMonthlyReimburseUsed() >= 2) {
+                throw new BizException(ResultCode.QUOTA_EXCEEDED.getCode(),
+                        "本月报销单额度已用完(2/2)，升级会员无限使用");
+            }
+        }
+    }
+
+    private void incrementReimburseUsed(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user != null) {
+            user.setMonthlyReimburseUsed(
+                    (user.getMonthlyReimburseUsed() == null ? 0 : user.getMonthlyReimburseUsed()) + 1);
+            userMapper.updateById(user);
+        }
     }
 
     private List<Expense> validateAndGetExpenses(Long userId, List<Long> expenseIds) {

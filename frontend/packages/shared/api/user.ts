@@ -1,4 +1,4 @@
-import { get, put, post } from './request'
+import { get, put, post, del } from './request'
 import type { UserVO, UserUpdateDTO } from '../types/user'
 
 export const getUserProfile = () =>
@@ -14,3 +14,6 @@ export const uploadAvatar = (file: File) => {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
+
+export const deleteAccount = () =>
+  del('/user/account')

@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     v-model="appStore.showAgreement"
-    :title="appStore.currentAgreement?.title || '用户协议更新'"
+    title="用户协议更新"
     width="600px"
     :close-on-click-modal="!appStore.agreementBlockMode"
     :close-on-press-escape="!appStore.agreementBlockMode"
@@ -9,15 +9,17 @@
     center
   >
     <div class="agreement-content">
-      <div v-if="appStore.currentAgreement?.changeSummary" class="change-summary">
+      <div v-if="summaryText" class="change-summary">
         <el-alert
-          :title="appStore.currentAgreement.changeSummary"
+          :title="summaryText"
           type="info"
           :closable="false"
           show-icon
         />
       </div>
-      <div class="agreement-body" v-html="appStore.currentAgreement?.content" />
+      <div class="agreement-body">
+        <p>请阅读并同意以下更新的协议内容。</p>
+      </div>
     </div>
     <template #footer>
       <div class="dialog-footer">
@@ -36,12 +38,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useAppStore } from '@qianku/shared'
 import { ElMessage } from 'element-plus'
 
 const appStore = useAppStore()
 const confirming = ref(false)
+
+const summaryText = computed(() => {
+  return appStore.pendingAgreements
+    .filter(a => a.changeSummary)
+    .map(a => a.changeSummary)
+    .join('；')
+})
 
 async function handleConfirm() {
   confirming.value = true

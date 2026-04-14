@@ -13,6 +13,8 @@ import com.qiankubx.module.expense.entity.Expense;
 import com.qiankubx.module.expense.entity.ExpenseCategory;
 import com.qiankubx.module.expense.mapper.ExpenseCategoryMapper;
 import com.qiankubx.module.expense.mapper.ExpenseMapper;
+import com.qiankubx.module.user.entity.User;
+import com.qiankubx.module.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,8 +38,11 @@ public class ExpenseService {
     private final OssConfig ossConfig;
     private final DataSignService dataSignService;
     private final InvoiceParseEngine invoiceParseEngine;
+    private final UserMapper userMapper;
 
     public InvoiceUploadVO uploadInvoice(Long userId, MultipartFile file) {
+        checkInvoiceQuota(userId);
+
         if (file.isEmpty()) {
             throw new BizException(ResultCode.BAD_REQUEST.getCode(), "文件不能为空");
         }
@@ -74,6 +79,8 @@ public class ExpenseService {
 
     @Transactional(rollbackFor = Exception.class)
     public Expense createExpense(Long userId, ExpenseCreateDTO dto) {
+        checkInvoiceQuota(userId);
+
         Expense expense = new Expense();
         expense.setUserId(userId);
         expense.setCategoryId(dto.getCategoryId());
@@ -100,6 +107,9 @@ public class ExpenseService {
         expense.setDataSign(dataSignService.sign(signPayload));
 
         expenseMapper.insert(expense);
+
+        incrementInvoiceUsed(userId);
+
         return expense;
     }
 
@@ -196,6 +206,25 @@ public class ExpenseService {
             throw new BizException(ResultCode.NOT_FOUND.getCode(), "费用记录不存在");
         }
         return expense;
+    }
+
+    private void checkInvoiceQuota(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user != null && (user.getMemberStatus() == null || user.getMemberStatus() == 0)) {
+            if (user.getMonthlyInvoiceUsed() != null && user.getMonthlyInvoiceUsed() >= 5) {
+                throw new BizException(ResultCode.QUOTA_EXCEEDED.getCode(),
+                        "本月发票上传额度已用完(5/5)，升级会员无限使用");
+            }
+        }
+    }
+
+    private void incrementInvoiceUsed(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user != null) {
+            user.setMonthlyInvoiceUsed(
+                    (user.getMonthlyInvoiceUsed() == null ? 0 : user.getMonthlyInvoiceUsed()) + 1);
+            userMapper.updateById(user);
+        }
     }
 
     private String buildSignPayload(Expense expense) {

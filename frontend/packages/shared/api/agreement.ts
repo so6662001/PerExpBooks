@@ -1,25 +1,47 @@
 import { get, post } from './request'
 
-export interface AgreementVO {
-  id: string
-  version: string
-  title: string
-  content: string
+export interface AgreementItem {
+  type: string
+  versionId: string
+  versionCode: string
   changeSummary: string
-  blockMode: boolean
-  effectiveAt: string
+  changeLevel: string
 }
 
 export interface AgreementCheckVO {
-  needConfirm: boolean
-  agreement: AgreementVO | null
+  needConsent: boolean
+  block: boolean
+  agreements: AgreementItem[]
+}
+
+export interface AgreementVersionVO {
+  id: string
+  type: string
+  versionCode: string
+  title: string
+  content: string
+  changeSummary: string
+  changeLevel: string
+  effectiveAt: string
+  createdAt: string
+}
+
+export interface AgreementSignDTO {
+  agreementType: string
+  versionId: string
 }
 
 export const checkAgreement = () =>
   get<AgreementCheckVO>('/agreement/check')
 
-export const confirmAgreement = (agreementId: string) =>
-  post('/agreement/confirm', { agreementId })
+export const signAgreement = (data: AgreementSignDTO) =>
+  post('/agreement/sign', data)
 
-export const getLatestAgreement = () =>
-  get<AgreementVO>('/agreement/latest')
+export const getCurrentAgreement = (type: string) =>
+  get<AgreementVersionVO>(`/agreement/current/${type}`)
+
+export const getAgreementHistory = (type: string) =>
+  get<AgreementVersionVO[]>(`/agreement/history/${type}`)
+
+export const getAgreementVersion = (id: string) =>
+  get<AgreementVersionVO>(`/agreement/version/${id}`)

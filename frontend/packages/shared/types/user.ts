@@ -1,3 +1,5 @@
+import type { AgreementCheckVO } from '../api/agreement'
+
 export interface SmsLoginDTO {
   phone: string
   code: string
@@ -6,37 +8,44 @@ export interface SmsLoginDTO {
 
 export interface LoginVO {
   token: string
-  userId: string
-  phone: string
-  nickname: string
-  avatar: string
-  isNewUser: boolean
+  isNew: boolean
+  user: UserVO
+  memberStatus: MemberStatusVO | null
+  agreementCheck: AgreementCheckVO | null
 }
 
 export interface UserVO {
   id: string
   phone: string
   nickname: string
-  avatar: string
-  email: string
+  avatarUrl: string
   company: string
   department: string
+  inviteCode: string
+  memberType: number
+  memberStatus: number
+  memberExpireTime: string
+  trialEndTime: string
+  teamId: string
+  monthlyInvoiceUsed: number
+  monthlyReimburseUsed: number
+  defaultSubsidy: number
   createdAt: string
 }
 
 export interface UserUpdateDTO {
   nickname?: string
-  avatar?: string
-  email?: string
+  avatarUrl?: string
   company?: string
   department?: string
+  defaultSubsidy?: number
 }
 
 export interface MemberStatusVO {
-  isMember: boolean
-  level: string
-  expireAt: string
-  remainingDays: number
-  monthlyQuota: number
-  usedQuota: number
+  memberType: number
+  memberStatus: number
+  memberExpireTime: string
+  trialEndTime: string
+  isTrial: boolean
+  isExpired: boolean
 }

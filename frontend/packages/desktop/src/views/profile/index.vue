@@ -16,7 +16,7 @@
               accept="image/*"
               @change="handleAvatarChange"
             >
-              <el-avatar :size="100" :src="userStore.userInfo?.avatar">
+              <el-avatar :size="100" :src="userStore.userInfo?.avatarUrl">
                 {{ userStore.userInfo?.nickname?.charAt(0) || 'U' }}
               </el-avatar>
               <div class="upload-tip">点击更换头像</div>
@@ -93,7 +93,7 @@ async function handleAvatarChange(file: UploadFile) {
   if (!file.raw) return
   try {
     const res = await uploadAvatar(file.raw)
-    await updateUserProfile({ avatar: res.url })
+    await updateUserProfile({ avatarUrl: res.url })
     userStore.fetchProfile()
     ElMessage.success('头像已更新')
   } catch {

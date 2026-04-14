@@ -36,4 +36,11 @@ public class UserController {
         Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
         return Result.ok(userService.getMemberStatus(userId));
     }
+
+    @DeleteMapping("/account")
+    public Result<Void> deleteAccount(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        userService.deleteAccount(userId);
+        return Result.ok();
+    }
 }

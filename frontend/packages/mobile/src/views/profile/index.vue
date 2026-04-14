@@ -57,7 +57,7 @@ async function handleLogout() {
           round
           width="60"
           height="60"
-          :src="userStore.userInfo?.avatar || ''"
+          :src="userStore.userInfo?.avatarUrl || ''"
           fit="cover"
         >
           <template #error>
@@ -69,8 +69,8 @@ async function handleLogout() {
         <div class="profile-detail">
           <div class="profile-name">{{ userStore.userInfo?.nickname || '未设置昵称' }}</div>
           <div class="profile-phone">{{ formatPhone(userStore.userInfo?.phone || '') }}</div>
-          <div v-if="userStore.memberStatus?.isMember" class="member-badge">
-            👑 {{ userStore.memberStatus.level }} 会员
+          <div v-if="userStore.memberStatus?.memberStatus === 1" class="member-badge">
+            👑 会员
           </div>
         </div>
       </div>

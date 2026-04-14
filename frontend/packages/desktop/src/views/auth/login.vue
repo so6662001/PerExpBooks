@@ -113,13 +113,16 @@ import { ref, reactive, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   useUserStore,
+  useAppStore,
   sendSms,
   smsLogin,
 } from '@qianku/shared'
+import { Tracker } from '@qianku/shared/analytics'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const userStore = useUserStore()
+const appStore = useAppStore()
 
 const form = reactive({
   phone: '',
@@ -173,6 +176,22 @@ async function handleLogin() {
       inviteCode: form.inviteCode || undefined,
     })
     userStore.setToken(res.token)
+    await userStore.fetchProfile()
+
+    if (res.agreementCheck) {
+      appStore.setAgreementCheckFromLogin(res.agreementCheck)
+    }
+
+    try {
+      const tracker = Tracker.getInstance()
+      tracker.track(res.isNew ? 'user_register' : 'user_login', {
+        loginType: 'sms',
+        hasInviteCode: !!form.inviteCode,
+      })
+    } catch {
+      // tracker may not be initialized
+    }
+
     ElMessage.success('登录成功')
     router.push('/dashboard')
   } catch {

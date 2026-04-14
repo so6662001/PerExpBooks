@@ -15,7 +15,6 @@ const form = ref({
   nickname: '',
   company: '',
   department: '',
-  email: '',
 })
 
 onMounted(async () => {
@@ -26,7 +25,6 @@ onMounted(async () => {
     form.value.nickname = userStore.userInfo.nickname || ''
     form.value.company = userStore.userInfo.company || ''
     form.value.department = userStore.userInfo.department || ''
-    form.value.email = userStore.userInfo.email || ''
   }
   loading.value = false
 })
@@ -42,7 +40,6 @@ async function handleSubmit() {
       nickname: form.value.nickname,
       company: form.value.company,
       department: form.value.department,
-      email: form.value.email,
     })
     await userStore.fetchProfile()
     showToast({ message: '保存成功', type: 'success' })
@@ -67,7 +64,7 @@ async function handleSubmit() {
           round
           width="80"
           height="80"
-          :src="userStore.userInfo?.avatar || ''"
+          :src="userStore.userInfo?.avatarUrl || ''"
           fit="cover"
         >
           <template #error>
@@ -94,12 +91,6 @@ async function handleSubmit() {
           v-model="form.department"
           label="部门"
           placeholder="请输入部门"
-        />
-        <van-field
-          v-model="form.email"
-          label="邮箱"
-          placeholder="请输入邮箱"
-          type="text"
         />
       </div>
 

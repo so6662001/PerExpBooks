@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showDialog, showToast } from 'vant'
-import { useUserStore } from '@qianku/shared'
+import { useUserStore, deleteAccount } from '@qianku/shared'
 
 defineOptions({ name: 'SettingsIndex' })
 
@@ -54,6 +54,24 @@ async function handleLogout() {
     // cancelled
   }
 }
+
+async function handleDeleteAccount() {
+  try {
+    await showDialog({
+      title: '注销账号',
+      message: '注销后，您的账号数据将被清除且无法恢复，确定要注销吗？',
+      showCancelButton: true,
+      confirmButtonColor: '#FF3B30',
+      confirmButtonText: '确认注销',
+    })
+    await deleteAccount()
+    showToast({ message: '账号已注销', type: 'success' })
+    userStore.logout()
+    router.replace('/auth/login')
+  } catch {
+    // cancelled or failed
+  }
+}
 </script>
 
 <template>
@@ -88,6 +106,12 @@ async function handleLogout() {
       </van-button>
     </div>
 
+    <div class="delete-section">
+      <van-button block round plain type="default" class="delete-btn" @click="handleDeleteAccount">
+        注销账号
+      </van-button>
+    </div>
+
     <van-popup v-model:show="showSubsidyPicker" position="bottom" round>
       <van-picker
         :columns="subsidyOptions"
@@ -108,6 +132,15 @@ async function handleLogout() {
 }
 
 .logout-section {
-  padding: 40px 24px;
+  padding: 40px 24px 0;
+}
+
+.delete-section {
+  padding: 16px 24px 40px;
+
+  .delete-btn {
+    color: #999;
+    border-color: #ddd;
+  }
 }
 </style>

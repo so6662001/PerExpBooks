@@ -5,11 +5,22 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.qiankubx.common.exception.BizException;
 import com.qiankubx.common.response.ResultCode;
 import com.qiankubx.common.util.JwtUtil;
+import com.qiankubx.module.agreement.dto.AgreementCheckVO;
+import com.qiankubx.module.agreement.entity.AgreementVersion;
+import com.qiankubx.module.agreement.entity.UserAgreementSign;
+import com.qiankubx.module.agreement.mapper.AgreementVersionMapper;
+import com.qiankubx.module.agreement.mapper.UserAgreementSignMapper;
+import com.qiankubx.module.agreement.service.AgreementService;
+import com.qiankubx.module.coupon.service.CouponService;
+import com.qiankubx.module.promotion.service.InviteService;
+import com.qiankubx.module.promotion.service.PointsService;
+import com.qiankubx.module.promotion.service.PromoterLevelService;
 import com.qiankubx.module.user.dto.*;
 import com.qiankubx.module.user.entity.User;
 import com.qiankubx.module.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +32,6 @@ import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class UserService {
 
     private static final String SMS_CODE_PREFIX = "sms:code:";
@@ -30,10 +40,43 @@ public class UserService {
     private static final int INVITE_CODE_LENGTH = 6;
     private static final int TRIAL_DAYS_DEFAULT = 30;
     private static final int TRIAL_DAYS_INVITED = 45;
+    private static final String TYPE_USER_AGREEMENT = "user_agreement";
+    private static final String TYPE_PRIVACY_POLICY = "privacy_policy";
 
     private final UserMapper userMapper;
     private final JwtUtil jwtUtil;
     private final StringRedisTemplate stringRedisTemplate;
+    private final AgreementVersionMapper agreementVersionMapper;
+    private final UserAgreementSignMapper userAgreementSignMapper;
+    private final AgreementService agreementService;
+    private final PromoterLevelService promoterLevelService;
+    private final CouponService couponService;
+    private final InviteService inviteService;
+    private final PointsService pointsService;
+
+    public UserService(
+            UserMapper userMapper,
+            JwtUtil jwtUtil,
+            StringRedisTemplate stringRedisTemplate,
+            AgreementVersionMapper agreementVersionMapper,
+            UserAgreementSignMapper userAgreementSignMapper,
+            @Lazy AgreementService agreementService,
+            @Lazy PromoterLevelService promoterLevelService,
+            @Lazy CouponService couponService,
+            @Lazy InviteService inviteService,
+            @Lazy PointsService pointsService
+    ) {
+        this.userMapper = userMapper;
+        this.jwtUtil = jwtUtil;
+        this.stringRedisTemplate = stringRedisTemplate;
+        this.agreementVersionMapper = agreementVersionMapper;
+        this.userAgreementSignMapper = userAgreementSignMapper;
+        this.agreementService = agreementService;
+        this.promoterLevelService = promoterLevelService;
+        this.couponService = couponService;
+        this.inviteService = inviteService;
+        this.pointsService = pointsService;
+    }
 
     @Transactional(rollbackFor = Exception.class)
     public LoginVO smsLogin(SmsLoginDTO dto) {
@@ -60,12 +103,13 @@ public class UserService {
         vo.setToken(token);
         vo.setIsNew(isNew);
         vo.setUser(toUserVO(user));
+        vo.setMemberStatus(getMemberStatus(user.getId()));
+        vo.setAgreementCheck(agreementService.checkAgreement(user.getId()));
         return vo;
     }
 
     @Transactional(rollbackFor = Exception.class)
     public LoginVO wxLogin(WxLoginDTO dto) {
-        // Simulated WeChat login: use code as openid for demo purposes
         String openid = "wx_" + dto.getCode();
 
         User user = userMapper.selectOne(
@@ -84,6 +128,8 @@ public class UserService {
         vo.setToken(token);
         vo.setIsNew(isNew);
         vo.setUser(toUserVO(user));
+        vo.setMemberStatus(getMemberStatus(user.getId()));
+        vo.setAgreementCheck(agreementService.checkAgreement(user.getId()));
         return vo;
     }
 
@@ -167,6 +213,23 @@ public class UserService {
         return vo;
     }
 
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteAccount(Long userId) {
+        User user = getById(userId);
+
+        user.setStatus(1);
+        user.setPhone(null);
+        user.setOpenid(null);
+        user.setUnionid(null);
+        user.setUpdatedAt(LocalDateTime.now());
+        userMapper.updateById(user);
+
+        stringRedisTemplate.delete("user:agreement:" + userId);
+        stringRedisTemplate.delete("user:member:" + userId);
+
+        log.info("用户注销账号: userId={}", userId);
+    }
+
     private User getById(Long userId) {
         User user = userMapper.selectById(userId);
         if (user == null) {
@@ -191,6 +254,8 @@ public class UserService {
         processInviteCode(user, inviteCode);
 
         userMapper.insert(user);
+
+        afterRegister(user, inviteCode);
         return user;
     }
 
@@ -210,7 +275,80 @@ public class UserService {
         processInviteCode(user, inviteCode);
 
         userMapper.insert(user);
+
+        afterRegister(user, inviteCode);
         return user;
+    }
+
+    private void afterRegister(User user, String inviteCode) {
+        Long userId = user.getId();
+
+        signCurrentAgreements(user);
+
+        promoterLevelService.getOrCreatePromoterLevel(userId);
+
+        couponService.issueNewUserCoupon(userId);
+
+        if (inviteCode != null && !inviteCode.isBlank()) {
+            inviteService.bindInviteRelation(userId, inviteCode);
+
+            User freshUser = userMapper.selectById(userId);
+            if (freshUser.getInviterId() != null) {
+                pointsService.addPoints(freshUser.getInviterId(), 5, "invite_register", userId, "邀请好友注册");
+                couponService.issueInviteCoupon(freshUser.getInviterId());
+            }
+        }
+
+        stringRedisTemplate.opsForValue().set("user:agreement:" + userId, "true");
+    }
+
+    private void signCurrentAgreements(User user) {
+        Long userId = user.getId();
+        LocalDateTime now = LocalDateTime.now();
+
+        AgreementVersion currentAgreement = findCurrentVersion(TYPE_USER_AGREEMENT);
+        if (currentAgreement != null) {
+            UserAgreementSign sign = new UserAgreementSign();
+            sign.setUserId(userId);
+            sign.setVersionId(currentAgreement.getId());
+            sign.setAgreementType(TYPE_USER_AGREEMENT);
+            sign.setVersionCode(currentAgreement.getVersionCode());
+            sign.setIpAddress("register");
+            sign.setSignedAt(now);
+            userAgreementSignMapper.insert(sign);
+
+            user.setAgreementVersionId(currentAgreement.getId());
+            user.setAgreementSignedAt(now);
+        }
+
+        AgreementVersion currentPrivacy = findCurrentVersion(TYPE_PRIVACY_POLICY);
+        if (currentPrivacy != null) {
+            UserAgreementSign sign = new UserAgreementSign();
+            sign.setUserId(userId);
+            sign.setVersionId(currentPrivacy.getId());
+            sign.setAgreementType(TYPE_PRIVACY_POLICY);
+            sign.setVersionCode(currentPrivacy.getVersionCode());
+            sign.setIpAddress("register");
+            sign.setSignedAt(now);
+            userAgreementSignMapper.insert(sign);
+
+            user.setPrivacyVersionId(currentPrivacy.getId());
+            user.setPrivacySignedAt(now);
+        }
+
+        user.setUpdatedAt(now);
+        userMapper.updateById(user);
+    }
+
+    private AgreementVersion findCurrentVersion(String type) {
+        return agreementVersionMapper.selectOne(
+                new LambdaQueryWrapper<AgreementVersion>()
+                        .eq(AgreementVersion::getType, type)
+                        .eq(AgreementVersion::getStatus, 1)
+                        .le(AgreementVersion::getEffectiveAt, LocalDateTime.now())
+                        .orderByDesc(AgreementVersion::getEffectiveAt)
+                        .last("LIMIT 1")
+        );
     }
 
     private void processInviteCode(User user, String inviteCode) {
@@ -222,9 +360,7 @@ public class UserService {
             );
             if (inviter != null) {
                 user.setInviterId(inviter.getId());
-                user.setRootInviterId(
-                        inviter.getRootInviterId() != null ? inviter.getRootInviterId() : inviter.getId()
-                );
+                user.setRootInviterId(inviter.getInviterId());
                 trialDays = TRIAL_DAYS_INVITED;
             }
         }

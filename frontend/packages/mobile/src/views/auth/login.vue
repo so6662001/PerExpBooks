@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { showToast } from 'vant'
-import { sendSms, smsLogin, useUserStore } from '@qianku/shared'
+import { sendSms, smsLogin, useUserStore, useAppStore } from '@qianku/shared'
+import { Tracker } from '@qianku/shared/analytics'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
+const appStore = useAppStore()
 
 const phone = ref('')
 const code = ref('')
@@ -13,7 +16,15 @@ const agreed = ref(false)
 const sending = ref(false)
 const logging = ref(false)
 const countdown = ref(0)
+const inviteCode = ref('')
 let timer: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  const invite = (route.query.inviteCode || route.query.invite || '') as string
+  if (invite) {
+    inviteCode.value = invite
+  }
+})
 
 const canSend = computed(() => phone.value.length === 11 && countdown.value === 0 && !sending.value)
 const canLogin = computed(() => phone.value.length === 11 && code.value.length >= 4 && agreed.value && !logging.value)
@@ -47,9 +58,28 @@ async function handleLogin() {
   if (!canLogin.value) return
   logging.value = true
   try {
-    const result = await smsLogin({ phone: phone.value, code: code.value })
+    const result = await smsLogin({
+      phone: phone.value,
+      code: code.value,
+      inviteCode: inviteCode.value || undefined,
+    })
     userStore.setToken(result.token)
     await userStore.fetchProfile()
+
+    if (result.agreementCheck) {
+      appStore.setAgreementCheckFromLogin(result.agreementCheck)
+    }
+
+    try {
+      const tracker = Tracker.getInstance()
+      tracker.track(result.isNew ? 'user_register' : 'user_login', {
+        loginType: 'sms',
+        hasInviteCode: !!inviteCode.value,
+      })
+    } catch {
+      // tracker may not be initialized
+    }
+
     showToast({ message: '登录成功', type: 'success' })
     router.replace('/')
   } catch (e: any) {

@@ -10,6 +10,13 @@ const confirming = ref(false)
 
 const canConfirm = computed(() => scrolledToBottom.value)
 
+const summaryText = computed(() => {
+  return appStore.pendingAgreements
+    .filter(a => a.changeSummary)
+    .map(a => a.changeSummary)
+    .join('；')
+})
+
 function onScroll(e: Event) {
   const el = e.target as HTMLElement
   const threshold = 50
@@ -57,19 +64,19 @@ function handleClose() {
     <div class="agreement-popup">
       <div class="agreement-header">
         <h2 class="agreement-title">
-          {{ appStore.currentAgreement?.title || '用户协议更新' }}
+          用户协议更新
         </h2>
         <p class="agreement-version">
-          版本 {{ appStore.currentAgreement?.version }}
+          {{ appStore.pendingAgreements.map(a => a.versionCode).join(' / ') }}
         </p>
       </div>
 
       <div
-        v-if="appStore.currentAgreement?.changeSummary"
+        v-if="summaryText"
         class="change-summary"
       >
         <div class="summary-label">变更摘要</div>
-        <div class="summary-content">{{ appStore.currentAgreement.changeSummary }}</div>
+        <div class="summary-content">{{ summaryText }}</div>
       </div>
 
       <div
@@ -77,7 +84,7 @@ function handleClose() {
         class="agreement-content"
         @scroll="onScroll"
       >
-        <div v-html="appStore.currentAgreement?.content" />
+        <p>请阅读并同意以下更新的协议内容。</p>
       </div>
 
       <div class="agreement-footer">

@@ -1,19 +1,19 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { checkAgreement, confirmAgreement, type AgreementVO } from '../api/agreement'
+import { checkAgreement, signAgreement, type AgreementCheckVO, type AgreementItem } from '../api/agreement'
 
 export const useAppStore = defineStore('app', () => {
   const showAgreement = ref(false)
-  const currentAgreement = ref<AgreementVO | null>(null)
+  const pendingAgreements = ref<AgreementItem[]>([])
   const agreementBlockMode = ref(false)
   const loading = ref(false)
 
   async function checkAgreementStatus() {
     try {
       const result = await checkAgreement()
-      if (result.needConfirm && result.agreement) {
-        currentAgreement.value = result.agreement
-        agreementBlockMode.value = result.agreement.blockMode
+      if (result.needConsent && result.agreements && result.agreements.length > 0) {
+        pendingAgreements.value = result.agreements
+        agreementBlockMode.value = result.block
         showAgreement.value = true
       }
     } catch (e) {
@@ -21,14 +21,24 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  function setAgreementCheckFromLogin(checkVO: AgreementCheckVO | null | undefined) {
+    if (checkVO && checkVO.needConsent && checkVO.agreements && checkVO.agreements.length > 0) {
+      pendingAgreements.value = checkVO.agreements
+      agreementBlockMode.value = checkVO.block
+      showAgreement.value = true
+    }
+  }
+
   async function acceptAgreement() {
-    if (!currentAgreement.value) return
+    if (pendingAgreements.value.length === 0) return
     try {
-      await confirmAgreement(currentAgreement.value.id)
+      for (const item of pendingAgreements.value) {
+        await signAgreement({ agreementType: item.type, versionId: item.versionId })
+      }
       showAgreement.value = false
-      currentAgreement.value = null
+      pendingAgreements.value = []
     } catch (e) {
-      console.error('Failed to confirm agreement:', e)
+      console.error('Failed to sign agreement:', e)
       throw e
     }
   }
@@ -36,16 +46,17 @@ export const useAppStore = defineStore('app', () => {
   function dismissAgreement() {
     if (!agreementBlockMode.value) {
       showAgreement.value = false
-      currentAgreement.value = null
+      pendingAgreements.value = []
     }
   }
 
   return {
     showAgreement,
-    currentAgreement,
+    pendingAgreements,
     agreementBlockMode,
     loading,
     checkAgreementStatus,
+    setAgreementCheckFromLogin,
     acceptAgreement,
     dismissAgreement,
   }

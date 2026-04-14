@@ -1,5 +1,6 @@
 package com.qiankubx.module.user.dto;
 
+import com.qiankubx.module.agreement.dto.AgreementCheckVO;
 import lombok.Data;
 
 @Data
@@ -10,4 +11,8 @@ public class LoginVO {
     private Boolean isNew;
 
     private UserVO user;
+
+    private MemberStatusVO memberStatus;
+
+    private AgreementCheckVO agreementCheck;
 }

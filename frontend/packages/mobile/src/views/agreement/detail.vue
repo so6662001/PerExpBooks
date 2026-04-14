@@ -2,19 +2,24 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { getLatestAgreement, formatDate } from '@qianku/shared'
-import type { AgreementVO } from '@qianku/shared'
+import { getAgreementVersion, getCurrentAgreement, formatDate } from '@qianku/shared'
+import type { AgreementVersionVO } from '@qianku/shared'
 
 defineOptions({ name: 'AgreementDetail' })
 
 const route = useRoute()
 const router = useRouter()
 const loading = ref(true)
-const agreement = ref<AgreementVO | null>(null)
+const agreement = ref<AgreementVersionVO | null>(null)
 
 onMounted(async () => {
   try {
-    agreement.value = await getLatestAgreement()
+    const id = route.params.id as string
+    if (id) {
+      agreement.value = await getAgreementVersion(id)
+    } else {
+      agreement.value = await getCurrentAgreement('user_agreement')
+    }
   } catch (e: any) {
     showToast(e.message || '加载失败')
   } finally {
@@ -38,7 +43,7 @@ onMounted(async () => {
       <div class="agreement-header card">
         <h2 class="agreement-title">{{ agreement.title }}</h2>
         <div class="agreement-meta">
-          <span>版本 {{ agreement.version }}</span>
+          <span>版本 {{ agreement.versionCode }}</span>
           <span>生效日期 {{ formatDate(agreement.effectiveAt) }}</span>
         </div>
       </div>

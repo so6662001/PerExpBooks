@@ -30,12 +30,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(authInterceptor)
-                .addPathPatterns("/**")
+                .addPathPatterns("/api/v1/**")
                 .excludePathPatterns(
-                        "/auth/**",
-                        "/v1/auth/**",
-                        "/agreement/**",
-                        "/v1/agreement/**",
+                        "/api/v1/auth/**",
+                        "/api/v1/agreement/**",
                         "/api/v1/member/wx-notify",
                         "/api/v1/member/ali-notify",
                         "/api/v1/member/plans",
@@ -50,14 +48,13 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .order(1);
 
         registry.addInterceptor(agreementInterceptor)
-                .addPathPatterns("/**")
+                .addPathPatterns("/api/v1/**")
                 .excludePathPatterns(
-                        "/auth/**",
-                        "/v1/auth/**",
-                        "/agreement/**",
-                        "/v1/agreement/**",
-                        "/user/agreement/**",
-                        "/v1/user/agreement/**",
+                        "/api/v1/auth/**",
+                        "/api/v1/agreement/**",
+                        "/api/v1/user/profile",
+                        "/api/v1/user/member-status",
+                        "/api/v1/user/account",
                         "/api/v1/analytics/report",
                         "/api/v1/analytics/performance",
                         "/api/v1/analytics/error",
@@ -69,14 +66,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .order(2);
 
         registry.addInterceptor(memberInterceptor)
-                .addPathPatterns("/**")
+                .addPathPatterns("/api/v1/**")
                 .excludePathPatterns(
-                        "/auth/**",
-                        "/v1/auth/**",
-                        "/agreement/**",
-                        "/v1/agreement/**",
-                        "/user/**",
-                        "/v1/user/**",
+                        "/api/v1/auth/**",
+                        "/api/v1/agreement/**",
+                        "/api/v1/user/**",
                         "/api/v1/member/**",
                         "/api/v1/coupon/**",
                         "/api/v1/team/**",
