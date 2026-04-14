@@ -101,7 +101,8 @@
 │   │   ├── api/             # API 请求封装
 │   │   ├── types/           # TypeScript 类型定义
 │   │   ├── utils/           # 工具函数
-│   │   └── stores/          # Pinia 状态管理
+│   │   ├── stores/          # Pinia 状态管理
+│   │   └── analytics/       # 埋点SDK (tracker/plugins/reporter)
 │   ├── mobile/              # H5 移动端 (Vant 4)
 │   │   ├── src/
 │   │   │   ├── views/       # 页面
@@ -1314,7 +1315,101 @@
 | log_sign | VARCHAR(64) | HMAC-SHA256 审计日志签名 |
 | created_at | DATETIME | 创建时间 |
 
-#### 4.2.17 分享行为记录表 (t_share_log)
+#### 4.2.17 埋点事件表 (t_analytics_event)
+
+> 存储所有前端上报的埋点事件数据。数据量大，建议按月分表。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 |
+| event_id | VARCHAR(36) | 事件唯一ID (UUID) |
+| event_type | VARCHAR(20) | 事件类型: page_view/click/exposure/performance/error |
+| event_name | VARCHAR(60) | 事件名称 |
+| user_id | BIGINT | 用户ID (未登录为0) |
+| session_id | VARCHAR(36) | 会话ID |
+| page_path | VARCHAR(100) | 页面路径 |
+| page_title | VARCHAR(50) | 页面标题 |
+| referrer_path | VARCHAR(100) | 来源页面路径 |
+| platform | VARCHAR(20) | 平台: miniprogram/h5_mobile/h5_desktop |
+| device_model | VARCHAR(50) | 设备型号 |
+| os | VARCHAR(20) | 操作系统 |
+| os_version | VARCHAR(20) | 系统版本 |
+| screen_width | SMALLINT | 屏幕宽度 |
+| screen_height | SMALLINT | 屏幕高度 |
+| network_type | VARCHAR(10) | 网络类型 |
+| app_version | VARCHAR(20) | 应用版本号 |
+| member_type | VARCHAR(10) | 会员类型 |
+| extra | JSON | 扩展字段 (各事件专有数据) |
+| event_time | DATETIME(3) | 事件发生时间 (毫秒精度) |
+| created_at | DATETIME | 服务端接收时间 |
+
+#### 4.2.18 页面性能数据表 (t_analytics_performance)
+
+> 存储页面性能指标，按页面维度聚合分析。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 |
+| user_id | BIGINT | 用户ID |
+| session_id | VARCHAR(36) | 会话ID |
+| page_path | VARCHAR(100) | 页面路径 |
+| platform | VARCHAR(20) | 平台 |
+| fcp | INT | 首次内容绘制 (ms) |
+| lcp | INT | 最大内容绘制 (ms) |
+| fid | INT | 首次输入延迟 (ms) |
+| cls | DECIMAL(5,3) | 累计布局偏移 |
+| ttfb | INT | 首字节时间 (ms) |
+| load_time | INT | 完全加载时间 (ms) |
+| inp | INT | 交互到下一帧 (ms) |
+| dom_ready | INT | DOM就绪时间 (ms) |
+| resource_count | INT | 资源请求数 |
+| resource_size_kb | INT | 资源总大小 (KB) |
+| js_heap_size_mb | INT | JS堆内存 (MB) |
+| network_type | VARCHAR(10) | 网络类型 |
+| event_time | DATETIME(3) | 事件时间 |
+| created_at | DATETIME | 创建时间 |
+
+#### 4.2.19 API请求监控表 (t_analytics_api)
+
+> 存储前端感知的 API 请求耗时和状态。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 |
+| user_id | BIGINT | 用户ID |
+| session_id | VARCHAR(36) | 会话ID |
+| api_path | VARCHAR(200) | API路径 |
+| method | VARCHAR(10) | 请求方法 |
+| status_code | SMALLINT | 响应状态码 |
+| duration_ms | INT | 请求耗时 (ms) |
+| request_size_kb | INT | 请求体大小 (KB) |
+| response_size_kb | INT | 响应体大小 (KB) |
+| is_timeout | TINYINT | 是否超时 |
+| error_type | VARCHAR(30) | 错误类型 |
+| page_path | VARCHAR(100) | 发起请求的页面 |
+| event_time | DATETIME(3) | 事件时间 |
+| created_at | DATETIME | 创建时间 |
+
+#### 4.2.20 前端异常表 (t_analytics_error)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 |
+| user_id | BIGINT | 用户ID |
+| session_id | VARCHAR(36) | 会话ID |
+| error_type | VARCHAR(30) | 异常类型: js_error/promise_error/resource_error/api_error |
+| error_message | VARCHAR(500) | 错误信息 |
+| error_stack | TEXT | 堆栈信息 (脱敏) |
+| page_path | VARCHAR(100) | 发生页面 |
+| user_action_before | JSON | 异常前最后3步操作 |
+| platform | VARCHAR(20) | 平台 |
+| device_model | VARCHAR(50) | 设备型号 |
+| os | VARCHAR(20) | 操作系统 |
+| app_version | VARCHAR(20) | 应用版本 |
+| event_time | DATETIME(3) | 事件时间 |
+| created_at | DATETIME | 创建时间 |
+
+#### 4.2.21 分享行为记录表 (t_share_log)
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -1464,6 +1559,31 @@
 | POST | `/withdrawal/apply` | 申请提现 (满¥50起提) |
 | GET | `/withdrawal/records` | 提现记录列表 |
 | GET | `/withdrawal/balance` | 可提现余额 & 冻结余额 |
+
+#### 埋点数据模块
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/analytics/report` | 批量上报埋点事件 (前端SDK调用) |
+| POST | `/analytics/performance` | 上报页面性能数据 |
+| POST | `/analytics/error` | 上报前端异常 |
+
+#### 数据分析看板 (仅管理员)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/admin/analytics/realtime` | 实时概览 (DAU/新增/在线) |
+| GET | `/admin/analytics/page-stats` | 各页面PV/UV/停留时长/跳出率 |
+| GET | `/admin/analytics/feature-usage` | 功能使用热度排行 |
+| GET | `/admin/analytics/funnel` | 漏斗分析 (支持多种预设漏斗) |
+| GET | `/admin/analytics/path` | 用户路径分析 |
+| GET | `/admin/analytics/retention` | 留存分析 (次日/7日/30日) |
+| GET | `/admin/analytics/performance` | 各页面性能报表 |
+| GET | `/admin/analytics/slow-apis` | 慢接口排行 |
+| GET | `/admin/analytics/errors` | 前端异常列表与趋势 |
+| GET | `/admin/analytics/user-segments` | 用户分群统计 |
+| GET | `/admin/analytics/conversion` | 转化弹窗效果分析 |
+| GET | `/admin/analytics/time-distribution` | 使用时段分布 |
 
 #### 安全审计模块 (仅管理员)
 
@@ -2029,7 +2149,24 @@ expense-manager/
 │   │   │       ├── PaySuccessListener.java   # 监听付费 → 触发返佣
 │   │   │       └── InviteSuccessListener.java# 监听注册 → 触发奖励
 │   │   │
-│   │   └── trigger/                    # 场景触发引擎 (新增)
+│   │   ├── analytics/                  # 埋点数据分析模块
+│   │   │   ├── controller/
+│   │   │   │   ├── AnalyticsReportController.java  # 埋点数据上报接口
+│   │   │   │   └── AnalyticsDashboardController.java # 管理端数据看板
+│   │   │   ├── service/
+│   │   │   │   ├── EventCollectService.java   # 事件接收与批量写入
+│   │   │   │   ├── PerformanceService.java    # 性能数据聚合分析
+│   │   │   │   ├── FunnelAnalysisService.java # 漏斗分析
+│   │   │   │   ├── PathAnalysisService.java   # 路径分析
+│   │   │   │   ├── RetentionService.java      # 留存分析
+│   │   │   │   └── AlertService.java          # 性能异常告警
+│   │   │   ├── mapper/
+│   │   │   ├── entity/
+│   │   │   ├── dto/
+│   │   │   └── listener/
+│   │   │       └── EventBatchWriteListener.java # MQ消费者：批量写入事件
+│   │   │
+│   │   └── trigger/                    # 场景触发引擎
 │   │       ├── service/
 │   │       │   ├── SceneTriggerService.java  # 场景触发管理
 │   │       │   └── ConversionGuideService.java # 转化引导逻辑
@@ -2329,7 +2466,459 @@ chain_hash = SHA256(id + user_id + points + balance_after + action + prev_hash +
 
 ---
 
-## 十、关键业务流程
+## 十、页面埋点与数据分析体系
+
+> 通过前端埋点 SDK 自动采集用户行为数据和页面性能数据，用于产品改进、体验优化和运营决策。
+> 采集遵循「最小必要」原则，不收集任何可直接识别个人身份的信息（如姓名、身份证号等），
+> 所有埋点数据匿名化处理后用于统计分析。
+
+### 10.1 埋点体系总览
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    埋点数据体系                                │
+│                                                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐ │
+│  │ 页面埋点  │  │ 事件埋点  │  │ 性能埋点  │  │ 曝光埋点    │ │
+│  │ (PV/UV)  │  │ (点击等)  │  │ (加载等)  │  │ (元素可见)  │ │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────┬───────┘ │
+│       │             │             │               │          │
+│       └─────────────┼─────────────┼───────────────┘          │
+│                     │ 前端埋点 SDK (统一上报)                  │
+│                     ▼                                        │
+│          ┌─────────────────────┐                             │
+│          │ 批量上报 + 本地缓存  │                             │
+│          │ (5s定时 / 离开页面)  │                             │
+│          └──────────┬──────────┘                             │
+│                     │ POST /api/v1/analytics/report           │
+│                     ▼                                        │
+│          ┌─────────────────────┐                             │
+│          │ 后端接收 → MQ 异步   │                             │
+│          │ → 批量写入数据库     │                             │
+│          └──────────┬──────────┘                             │
+│                     │                                        │
+│                     ▼                                        │
+│          ┌─────────────────────┐                             │
+│          │ 数据分析看板 (管理端)│                             │
+│          │ · 漏斗分析           │                             │
+│          │ · 路径分析           │                             │
+│          │ · 留存分析           │                             │
+│          │ · 性能监控           │                             │
+│          │ · 功能使用热度       │                             │
+│          └─────────────────────┘                             │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 10.2 前端埋点 SDK 设计
+
+#### 10.2.1 SDK 架构
+
+```
+packages/shared/analytics/
+├── tracker.ts              # 核心 Tracker 类（单例）
+├── plugins/
+│   ├── pageViewPlugin.ts   # 页面访问自动追踪（路由切换）
+│   ├── clickPlugin.ts      # 点击事件自动追踪（事件代理）
+│   ├── performancePlugin.ts# 性能数据自动采集（Performance API）
+│   ├── exposurePlugin.ts   # 元素曝光追踪（IntersectionObserver）
+│   └── errorPlugin.ts      # 前端异常自动捕获
+├── reporter.ts             # 数据上报（批量/实时/离线缓存）
+├── sessionManager.ts       # 会话管理（session_id 生成与维护）
+├── utils.ts                # 工具函数（设备指纹/UUID等）
+└── types.ts                # TypeScript 类型定义
+```
+
+#### 10.2.2 数据采集字段规范
+
+**每条埋点数据包含的公共字段：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| event_id | STRING | 事件唯一ID (UUID) |
+| event_type | STRING | 事件类型: page_view / click / exposure / performance / error |
+| event_name | STRING | 事件名称 (如: upload_invoice_click) |
+| user_id | BIGINT | 用户ID (已登录用户，未登录为0) |
+| session_id | STRING | 会话ID (每次打开应用生成) |
+| page_path | STRING | 当前页面路径 (如: /expense/upload) |
+| page_title | STRING | 页面标题 |
+| referrer_path | STRING | 来源页面路径 |
+| timestamp | BIGINT | 事件发生时间戳 (ms) |
+| platform | STRING | 平台: miniprogram / h5_mobile / h5_desktop |
+| device_model | STRING | 设备型号 |
+| os | STRING | 操作系统 |
+| os_version | STRING | 系统版本 |
+| screen_width | INT | 屏幕宽度 |
+| screen_height | INT | 屏幕高度 |
+| network_type | STRING | 网络类型: wifi / 4g / 5g |
+| app_version | STRING | 应用版本号 |
+| member_type | STRING | 会员类型: free / monthly / yearly / team |
+| extra | JSON | 扩展字段（各事件专有数据） |
+
+### 10.3 全页面埋点方案
+
+#### 10.3.1 页面访问埋点（自动采集，路由切换时触发）
+
+| 页面 | page_path | page_title | 采集额外字段 |
+|------|-----------|-----------|-------------|
+| **首页** | `/home` | 首页 | 待报销金额、待报销笔数 |
+| **费用列表** | `/expense/list` | 费用列表 | 筛选条件(tab/时间/分类)、列表条数 |
+| **上传发票** | `/expense/upload` | 上传发票 | - |
+| **费用详情** | `/expense/detail` | 费用详情 | 费用类型、来源(发票/手动) |
+| **手动添加费用** | `/expense/add` | 添加费用 | - |
+| **出差列表** | `/trip/list` | 出差管理 | 出差记录数 |
+| **出差详情** | `/trip/detail` | 出差详情 | 关联费用数 |
+| **创建出差** | `/trip/create` | 创建出差 | - |
+| **报销单列表** | `/reimbursement/list` | 报销管理 | 当前tab(已生成/已导出/已收款) |
+| **创建报销单** | `/reimbursement/create` | 创建报销单 | 已选费用项数 |
+| **报销单详情** | `/reimbursement/detail` | 报销单详情 | 费用项数、发票原件数 |
+| **统计概览** | `/stats/overview` | 统计概览 | - |
+| **月度趋势** | `/stats/monthly` | 月度趋势 | 查看的时间范围 |
+| **分类分析** | `/stats/category` | 分类分析 | - |
+| **出差统计** | `/stats/trip` | 出差统计 | - |
+| **会员中心** | `/member/center` | 会员中心 | 当前会员类型、剩余天数 |
+| **推广中心** | `/promotion/center` | 推广中心 | 推广等级、积分余额 |
+| **个人中心** | `/profile` | 个人中心 | - |
+| **设置** | `/settings` | 设置 | - |
+| **登录页** | `/auth/login` | 登录 | 登录方式(微信/手机号) |
+| **注册落地页** | `/landing` | 邀请落地页 | 邀请码、来源渠道 |
+
+#### 10.3.2 用户操作事件埋点（手动 + 自动）
+
+**费用管理模块：**
+
+| 事件名称 | 触发时机 | 扩展字段 |
+|----------|---------|---------|
+| `invoice_upload_start` | 用户开始上传发票 | file_size, file_name |
+| `invoice_upload_success` | 发票上传成功 | file_size, parse_duration_ms |
+| `invoice_upload_fail` | 发票上传失败 | error_type, error_msg |
+| `invoice_parse_success` | 发票解析成功 | parsed_fields_count, invoice_type |
+| `invoice_parse_fail` | 发票解析失败 | error_type |
+| `invoice_parse_edit` | 用户修改解析结果 | edited_fields[] |
+| `expense_add_manual` | 手动添加费用 | category, amount_range |
+| `expense_delete` | 删除费用记录 | expense_type |
+| `expense_filter_change` | 切换筛选条件 | filter_type, filter_value |
+
+**出差管理模块：**
+
+| 事件名称 | 触发时机 | 扩展字段 |
+|----------|---------|---------|
+| `trip_create` | 创建出差记录 | days, destination_city |
+| `trip_edit` | 编辑出差记录 | edited_fields[] |
+| `trip_delete` | 删除出差记录 | - |
+
+**报销模块：**
+
+| 事件名称 | 触发时机 | 扩展字段 |
+|----------|---------|---------|
+| `reimburse_select_items` | 选择报销费用项 | item_count, total_amount, has_invoice_count |
+| `reimburse_generate` | 点击生成报销单 | item_count, total_amount |
+| `reimburse_generate_success` | 报销单生成成功 | generate_duration_ms |
+| `reimburse_preview` | 预览报销单 | - |
+| `reimburse_export_merged_pdf` | 导出合并PDF | file_size |
+| `reimburse_export_zip` | 导出ZIP压缩包 | file_size, invoice_count |
+| `reimburse_export_pdf_only` | 仅导出报销单PDF | - |
+| `reimburse_send_email` | 发送到邮箱 | - |
+| `reimburse_send_email_success` | 邮件发送成功 | - |
+| `reimburse_confirm_received` | 确认已收钱 | days_since_submit |
+
+**会员与支付模块：**
+
+| 事件名称 | 触发时机 | 扩展字段 |
+|----------|---------|---------|
+| `member_page_view` | 查看会员中心 | current_member_type |
+| `member_plan_click` | 点击套餐卡片 | plan_type(monthly/yearly/team) |
+| `member_pay_start` | 点击立即开通 | plan_type, pay_type, coupon_used, final_amount |
+| `member_pay_success` | 支付成功 | plan_type, pay_type, amount |
+| `member_pay_fail` | 支付失败 | plan_type, error_type |
+| `coupon_view` | 查看优惠券 | available_count |
+| `coupon_use` | 使用优惠券 | coupon_type, discount_amount |
+| `conversion_popup_show` | 转化引导弹窗展示 | trigger_scene, popup_type |
+| `conversion_popup_click` | 转化引导弹窗点击 | trigger_scene, action(upgrade/dismiss) |
+
+**推广与分享模块：**
+
+| 事件名称 | 触发时机 | 扩展字段 |
+|----------|---------|---------|
+| `share_poster_generate` | 生成分享海报 | poster_type |
+| `share_copy_text` | 复制分享文案 | template_id |
+| `share_to_friend` | 分享给好友 | - |
+| `share_to_moments` | 分享到朋友圈 | - |
+| `share_card_generate` | 生成社交货币卡片 | card_type(achievement/efficiency/monthly) |
+| `share_trigger_show` | 场景触发分享弹窗展示 | trigger_scene |
+| `share_trigger_click` | 场景触发分享弹窗点击 | trigger_scene, action(share/dismiss) |
+| `points_redeem` | 积分兑换 | redeem_type, points_cost |
+| `withdrawal_apply` | 申请提现 | amount, withdraw_type |
+
+**通用操作：**
+
+| 事件名称 | 触发时机 | 扩展字段 |
+|----------|---------|---------|
+| `tab_switch` | 底部Tab切换 | from_tab, to_tab |
+| `pull_to_refresh` | 下拉刷新 | page_path |
+| `scroll_to_bottom` | 滚动到底加载更多 | page_path, current_page_num |
+| `search` | 搜索操作 | keyword_length, page_path |
+| `back_button` | 点击返回 | from_page |
+
+### 10.4 页面性能监控
+
+#### 10.4.1 性能指标采集（Performance API 自动采集）
+
+| 指标 | 英文 | 说明 | 优秀标准 |
+|------|------|------|---------|
+| 首次内容绘制 | FCP (First Contentful Paint) | 页面首个内容元素渲染完成 | < 1.8s |
+| 最大内容绘制 | LCP (Largest Contentful Paint) | 最大可见内容元素渲染完成 | < 2.5s |
+| 首次输入延迟 | FID (First Input Delay) | 用户首次交互到浏览器响应 | < 100ms |
+| 累计布局偏移 | CLS (Cumulative Layout Shift) | 页面视觉稳定性 | < 0.1 |
+| 首次字节时间 | TTFB (Time to First Byte) | 服务器首字节响应时间 | < 600ms |
+| 页面完全加载 | Load Time | DOMContentLoaded 到 Load | < 3s |
+| 交互到下一帧 | INP (Interaction to Next Paint) | 整体交互响应速度 | < 200ms |
+
+**每个页面采集的性能数据：**
+
+```json
+{
+  "event_type": "performance",
+  "page_path": "/expense/upload",
+  "metrics": {
+    "fcp": 1200,
+    "lcp": 2100,
+    "fid": 45,
+    "cls": 0.05,
+    "ttfb": 380,
+    "load_time": 2800,
+    "inp": 120,
+    "dom_ready": 1500,
+    "resource_count": 25,
+    "resource_size_kb": 580,
+    "js_heap_size_mb": 32
+  }
+}
+```
+
+#### 10.4.2 API 请求性能监控（自动拦截 Axios 请求）
+
+| 采集字段 | 说明 |
+|----------|------|
+| api_path | 请求路径 (如: /api/v1/expense/upload-invoice) |
+| method | 请求方法 (GET/POST/PUT/DELETE) |
+| status_code | 响应状态码 |
+| duration_ms | 请求耗时 (ms) |
+| request_size_kb | 请求体大小 |
+| response_size_kb | 响应体大小 |
+| is_timeout | 是否超时 |
+| error_type | 错误类型 (network/timeout/server_error/business_error) |
+
+**慢接口告警阈值：**
+
+| API类别 | 正常 | 较慢 | 告警 |
+|---------|------|------|------|
+| 列表查询 | < 500ms | 500-1500ms | > 1500ms |
+| 详情查询 | < 300ms | 300-1000ms | > 1000ms |
+| 发票上传+解析 | < 5s | 5-15s | > 15s |
+| PDF/ZIP 生成 | < 10s | 10-30s | > 30s |
+| 支付接口 | < 3s | 3-8s | > 8s |
+
+#### 10.4.3 前端异常监控
+
+| 采集字段 | 说明 |
+|----------|------|
+| error_type | JS异常 / Promise异常 / 资源加载失败 / API异常 |
+| error_message | 错误信息 |
+| error_stack | 堆栈信息 (脱敏，不含用户数据) |
+| page_path | 发生异常的页面 |
+| user_action_before | 异常前用户的最后3步操作 |
+| device_info | 设备和浏览器信息 |
+
+### 10.5 用户行为分析模型
+
+#### 10.5.1 核心漏斗分析
+
+**漏斗一：新用户注册→付费转化**
+
+```
+访问落地页
+    ↓  (落地页转化率)
+点击注册/微信授权
+    ↓  (注册完成率)
+注册成功
+    ↓  (首次使用率)
+上传第一张发票 / 添加第一笔费用
+    ↓  (核心功能使用率)
+生成第一张报销单
+    ↓  (付费转化率)
+成为付费会员
+    ↓  (长期留存率)
+续费
+```
+
+**漏斗二：报销全流程**
+
+```
+进入费用列表页
+    ↓
+选择待报销费用项
+    ↓
+进入创建报销单页
+    ↓
+填写标题和备注
+    ↓
+点击生成报销单
+    ↓
+选择导出方式
+    ↓
+导出成功 / 邮件发送成功
+    ↓
+确认已收钱
+```
+
+**漏斗三：推广裂变**
+
+```
+进入推广中心
+    ↓
+点击生成海报/复制文案/分享
+    ↓
+被邀请人点击链接
+    ↓
+被邀请人注册成功
+    ↓
+被邀请人付费
+    ↓
+邀请人获得返佣
+```
+
+**漏斗四：转化弹窗效果**
+
+```
+触发场景(如第4张发票上传)
+    ↓
+弹窗展示
+    ↓
+用户点击升级(而非关闭)
+    ↓
+进入会员中心
+    ↓
+选择套餐
+    ↓
+支付成功
+```
+
+#### 10.5.2 用户路径分析
+
+追踪用户在应用内的页面跳转路径，发现：
+- **常见路径**：用户最常走的功能链路
+- **异常路径**：用户频繁跳出或反复返回的节点（体验瓶颈）
+- **高效路径**：完成核心任务最快的路径（推广为最佳实践）
+
+```
+路径分析数据结构：
+┌─────────────────────────────────────────────────────┐
+│  session_id: "abc123"                               │
+│  path_sequence:                                     │
+│    [首页, 0s]                                       │
+│    → [费用列表, 3s]                                 │
+│    → [上传发票, 8s]                                 │
+│    → [上传发票(停留52s, 上传成功)]                   │
+│    → [费用列表, 62s]                                │
+│    → [创建报销单, 68s]                              │
+│    → [创建报销单(停留35s, 生成成功)]                │
+│    → [报销单详情, 105s]                             │
+│    → [导出合并PDF, 110s]                            │
+│  total_duration: 110s                               │
+│  task_completed: reimbursement_export               │
+└─────────────────────────────────────────────────────┘
+```
+
+#### 10.5.3 功能使用热度分析
+
+| 统计维度 | 说明 | 用途 |
+|----------|------|------|
+| 功能使用频率排行 | 每个功能的日/周/月使用次数 | 确定核心功能 vs 低频功能 |
+| 功能使用深度 | 用户在每个功能内停留时长和操作步数 | 评估功能复杂度 |
+| 功能放弃率 | 进入某功能但未完成目标操作的比例 | 发现体验瓶颈 |
+| 首次使用时间分布 | 新用户首次使用各功能的天数分布 | 优化新手引导 |
+| 时段分布 | 各功能在一天中不同时段的使用峰值 | 优化推送时机 |
+
+#### 10.5.4 用户分群与留存分析
+
+**用户生命周期分群：**
+
+| 分群 | 定义 | 分析重点 |
+|------|------|---------|
+| 新用户 (0-7天) | 注册7天内 | 激活率、首次上传发票率、功能探索路径 |
+| 成长期 (8-30天) | 注册8-30天 | 核心功能使用深度、付费转化率 |
+| 成熟期 (30天+) | 注册30天以上 | 留存率、ARPU、推荐率 |
+| 沉默用户 | 7天未登录 | 流失原因、召回策略效果 |
+| 流失用户 | 30天未登录 | 流失前最后操作、唤回券使用率 |
+
+**留存分析指标：**
+
+| 指标 | 计算方式 | 目标值 |
+|------|---------|--------|
+| 次日留存 | 注册次日回访率 | > 40% |
+| 7日留存 | 注册7天后回访率 | > 25% |
+| 30日留存 | 注册30天后回访率 | > 15% |
+| 付费用户月留存 | 付费用户下月续费率 | > 60% |
+| 功能留存 | 使用过某功能后再次使用率 | 因功能而异 |
+
+#### 10.5.5 管理端数据看板
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                   数据分析看板 (管理端)                        │
+│                                                              │
+│  ── 实时概览 ──                                              │
+│  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐          │
+│  │ 今日 │  │ 今日 │  │ 今日 │  │ 今日 │  │ 实时 │          │
+│  │ DAU  │  │ 新增 │  │ 付费 │  │ 营收 │  │ 在线 │          │
+│  │ 1,280│  │  85  │  │  12  │  │¥1,188│  │  346 │          │
+│  └──────┘  └──────┘  └──────┘  └──────┘  └──────┘          │
+│                                                              │
+│  ── 页面分析 ──                                              │
+│  各页面 PV/UV | 停留时长 | 跳出率 | 性能评分                  │
+│                                                              │
+│  ── 功能使用 ──                                              │
+│  功能热度排行 | 使用趋势 | 放弃率                             │
+│                                                              │
+│  ── 转化漏斗 ──                                              │
+│  注册→付费 | 报销全流程 | 推广裂变 | 弹窗转化                 │
+│                                                              │
+│  ── 性能监控 ──                                              │
+│  各页面加载性能 | 慢接口排行 | 异常趋势 | 错误详情             │
+│                                                              │
+│  ── 用户分析 ──                                              │
+│  留存曲线 | 用户分群 | 行为路径 | 时段分布                    │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 10.6 埋点数据上报策略
+
+```
+前端采集事件
+    │
+    ├── 高优先级事件（立即上报）
+    │   · 支付成功/失败
+    │   · 前端异常
+    │   · 关键转化节点
+    │
+    ├── 普通事件（批量上报）
+    │   · 页面访问、点击、曝光
+    │   · 每 5 秒或累计 10 条时批量发送
+    │
+    └── 性能数据（页面离开时上报）
+        · 页面性能指标
+        · API 请求汇总
+        · 页面停留时长
+
+    离线缓存机制：
+    · 网络断开时，事件暂存 IndexedDB/localStorage
+    · 网络恢复后自动重新上报
+    · 本地最多缓存 500 条，超出时丢弃最早的事件
+```
+
+---
+
+## 十一、关键业务流程
 
 ### 10.1 发票上传 → 报销 → 打包导出完整流程
 
