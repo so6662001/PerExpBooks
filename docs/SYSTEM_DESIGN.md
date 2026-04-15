@@ -84,7 +84,7 @@
 | **PDF 解析** | Apache PDFBox | 第一级解析：电子发票PDF文本提取 |
 | **OFD 解析** | ofdrw 开源库 | 第一级解析：OFD格式全电发票解析 |
 | **云端 OCR** | 百度OCR API / 腾讯OCR API | 第二级解析：拍照识别+PDFBox降级+OFD降级 |
-| **PDF 生成** | iText 7 / Flying Saucer | 生成报销单 PDF |
+| **PDF 生成** | iText 9 | 生成报销单 PDF |
 | **PDF 合并** | Apache PDFBox / iText 7 | 合并报销单与发票原件为一个PDF |
 | **ZIP 打包** | Java ZipOutputStream | 打包报销材料为ZIP文件 |
 | **Excel 生成** | Apache POI / EasyExcel | 生成发票清单Excel |
