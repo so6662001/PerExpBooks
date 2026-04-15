@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.qiankubx.common.exception.BizException;
 import com.qiankubx.common.security.DataSignService;
+import com.qiankubx.common.security.TamperAlertService;
+import com.qiankubx.common.util.AesUtil;
 import com.qiankubx.module.promotion.dto.BalanceVO;
 import com.qiankubx.module.promotion.dto.WithdrawalVO;
 import com.qiankubx.module.promotion.entity.PromoterLevel;
@@ -30,9 +32,11 @@ public class WithdrawalService {
     private final PromoterLevelService promoterLevelService;
     private final DataSignService dataSignService;
     private final AntiCheatService antiCheatService;
+    private final TamperAlertService tamperAlertService;
+    private final AesUtil aesUtil;
 
     @Transactional(rollbackFor = Exception.class)
-    public void applyWithdraw(Long userId, BigDecimal amount, Integer withdrawType) {
+    public void applyWithdraw(Long userId, BigDecimal amount, Integer withdrawType, String accountInfo) {
         if (amount.compareTo(new BigDecimal("50")) < 0) {
             throw new BizException(400, "最低提现金额为50元");
         }
@@ -40,6 +44,10 @@ public class WithdrawalService {
         PromoterLevel level = promoterLevelService.getOrCreatePromoterLevel(userId);
         if (level.getAvailableBalance().compareTo(amount) < 0) {
             throw new BizException(400, "可提现余额不足");
+        }
+
+        if (tamperAlertService.isUserFrozen(userId)) {
+            throw new BizException(403, "您的账户资金操作已被暂时冻结，请联系客服");
         }
 
         antiCheatService.assertWithdrawalNotFlagged(userId);
@@ -55,21 +63,28 @@ public class WithdrawalService {
             throw new BizException(400, "每月最多提现2次");
         }
 
+        level.setAvailableBalance(level.getAvailableBalance().subtract(amount));
+        level.setWithdrawnAmount(level.getWithdrawnAmount().add(amount));
+        level.setUpdatedAt(LocalDateTime.now());
+        level.setDataSign(dataSignService.sign(promoterLevelService.buildPromoterSignPayload(level)));
+
         promoterLevelMapper.update(null, new LambdaUpdateWrapper<PromoterLevel>()
                 .eq(PromoterLevel::getUserId, userId)
                 .setSql("available_balance = available_balance - " + amount)
                 .setSql("withdrawn_amount = withdrawn_amount + " + amount)
-                .set(PromoterLevel::getUpdatedAt, LocalDateTime.now())
+                .set(PromoterLevel::getUpdatedAt, level.getUpdatedAt())
+                .set(PromoterLevel::getDataSign, level.getDataSign())
         );
 
         Withdrawal withdrawal = new Withdrawal();
         withdrawal.setUserId(userId);
         withdrawal.setAmount(amount);
         withdrawal.setWithdrawType(withdrawType);
+        withdrawal.setAccountInfo(aesUtil.encrypt(accountInfo));
         withdrawal.setStatus(0);
         withdrawal.setCreatedAt(LocalDateTime.now());
 
-        String signPayload = userId + "|" + amount + "|" + withdrawType + "|" + withdrawal.getCreatedAt();
+        String signPayload = withdrawal.getId() + "|" + userId + "|" + amount + "|" + withdrawal.getStatus() + "|" + withdrawal.getCreatedAt();
         withdrawal.setDataSign(dataSignService.sign(signPayload));
 
         withdrawalMapper.insert(withdrawal);
@@ -116,6 +131,7 @@ public class WithdrawalService {
             default -> "未知";
         });
         vo.setRejectReason(w.getRejectReason());
+        vo.setAccountInfo(aesUtil.decrypt(w.getAccountInfo()));
         vo.setProcessedAt(w.getProcessedAt());
         vo.setCreatedAt(w.getCreatedAt());
         return vo;

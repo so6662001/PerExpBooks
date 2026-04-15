@@ -364,12 +364,9 @@ public class MemberService {
     }
 
     private String buildSignPayload(MemberOrder order) {
-        return order.getId() + "|"
-                + order.getUserId() + "|"
-                + order.getOrderNo() + "|"
-                + order.getPlanType() + "|"
-                + order.getPayAmount() + "|"
-                + order.getPayStatus();
+        return order.getId() + "|" + order.getUserId() + "|" + order.getPayAmount() + "|"
+                + order.getPlanType() + "|" + order.getPayStatus() + "|" + order.getPayTime()
+                + "|" + order.getCreatedAt();
     }
 
     private OrderVO toOrderVO(MemberOrder order) {

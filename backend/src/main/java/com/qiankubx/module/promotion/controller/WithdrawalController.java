@@ -24,7 +24,7 @@ public class WithdrawalController {
     public Result<Void> apply(HttpServletRequest request,
                                @Valid @RequestBody WithdrawDTO dto) {
         Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
-        withdrawalService.applyWithdraw(userId, dto.getAmount(), dto.getWithdrawType());
+        withdrawalService.applyWithdraw(userId, dto.getAmount(), dto.getWithdrawType(), dto.getAccountInfo());
         return Result.ok();
     }
 

@@ -42,6 +42,8 @@ public class PromoterLevel {
 
     private Integer totalPoints;
 
+    private String dataSign;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

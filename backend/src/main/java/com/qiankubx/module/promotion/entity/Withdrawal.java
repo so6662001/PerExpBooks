@@ -22,6 +22,8 @@ public class Withdrawal {
     /** 1微信 2支付宝 3银行卡 */
     private Integer withdrawType;
 
+    private String accountInfo;
+
     /** 0处理中 1已完成 2已拒绝 */
     private Integer status;
 

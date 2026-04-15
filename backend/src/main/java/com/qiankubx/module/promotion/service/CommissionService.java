@@ -302,11 +302,9 @@ public class CommissionService {
     }
 
     private String buildCommissionSignPayload(Commission c) {
-        return c.getUserId() + "|"
-                + c.getOrderId() + "|"
-                + c.getInviteeId() + "|"
-                + c.getLevel() + "|"
-                + c.getCommissionAmount();
+        return c.getId() + "|" + c.getUserId() + "|" + c.getCommissionAmount() + "|"
+                + c.getCommissionType() + "|" + c.getOrderId() + "|" + c.getInviteeId()
+                + "|" + c.getStatus() + "|" + c.getCreatedAt();
     }
 
     private String getCommissionStatusName(Integer status) {

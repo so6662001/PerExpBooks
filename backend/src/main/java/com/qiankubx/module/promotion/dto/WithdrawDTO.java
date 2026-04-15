@@ -15,4 +15,6 @@ public class WithdrawDTO {
 
     @NotNull(message = "提现方式不能为空")
     private Integer withdrawType;
+
+    private String accountInfo;
 }

@@ -2,6 +2,7 @@ package com.qiankubx.module.promotion.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.qiankubx.common.security.DataSignService;
 import com.qiankubx.module.promotion.dto.LevelInfoVO;
 import com.qiankubx.module.promotion.entity.PromoterLevel;
 import com.qiankubx.module.promotion.mapper.PromoterLevelMapper;
@@ -19,6 +20,7 @@ import java.time.LocalDateTime;
 public class PromoterLevelService {
 
     private final PromoterLevelMapper promoterLevelMapper;
+    private final DataSignService dataSignService;
 
     public PromoterLevel getOrCreatePromoterLevel(Long userId) {
         PromoterLevel level = promoterLevelMapper.selectOne(
@@ -42,6 +44,7 @@ public class PromoterLevelService {
             level.setTotalPoints(0);
             level.setCreatedAt(LocalDateTime.now());
             level.setUpdatedAt(LocalDateTime.now());
+            level.setDataSign(dataSignService.sign(buildPromoterSignPayload(level)));
             promoterLevelMapper.insert(level);
         }
         return level;
@@ -101,13 +104,21 @@ public class PromoterLevelService {
         }
 
         if (newLevel > level.getLevel()) {
+            level.setLevel(newLevel);
+            level.setLevelName(newLevelName);
+            level.setLevel1Rate(newLevel1Rate);
+            level.setLevel2Rate(newLevel2Rate);
+            level.setUpdatedAt(LocalDateTime.now());
+            level.setDataSign(dataSignService.sign(buildPromoterSignPayload(level)));
+
             promoterLevelMapper.update(null, new LambdaUpdateWrapper<PromoterLevel>()
                     .eq(PromoterLevel::getUserId, userId)
                     .set(PromoterLevel::getLevel, newLevel)
                     .set(PromoterLevel::getLevelName, newLevelName)
                     .set(PromoterLevel::getLevel1Rate, newLevel1Rate)
                     .set(PromoterLevel::getLevel2Rate, newLevel2Rate)
-                    .set(PromoterLevel::getUpdatedAt, LocalDateTime.now())
+                    .set(PromoterLevel::getUpdatedAt, level.getUpdatedAt())
+                    .set(PromoterLevel::getDataSign, level.getDataSign())
             );
             log.info("推广员升级: userId={}, {} -> {}", userId, level.getLevelName(), newLevelName);
         }
@@ -115,19 +126,36 @@ public class PromoterLevelService {
 
     public void incrementInviteCount(Long userId) {
         PromoterLevel level = getOrCreatePromoterLevel(userId);
+        level.setInviteCount(level.getInviteCount() + 1);
+        level.setUpdatedAt(LocalDateTime.now());
+        level.setDataSign(dataSignService.sign(buildPromoterSignPayload(level)));
+
         promoterLevelMapper.update(null, new LambdaUpdateWrapper<PromoterLevel>()
                 .eq(PromoterLevel::getUserId, userId)
                 .setSql("invite_count = invite_count + 1")
-                .set(PromoterLevel::getUpdatedAt, LocalDateTime.now())
+                .set(PromoterLevel::getUpdatedAt, level.getUpdatedAt())
+                .set(PromoterLevel::getDataSign, level.getDataSign())
         );
     }
 
     public void incrementPaidInviteCount(Long userId) {
+        PromoterLevel level = getOrCreatePromoterLevel(userId);
+        level.setPaidInviteCount(level.getPaidInviteCount() + 1);
+        level.setUpdatedAt(LocalDateTime.now());
+        level.setDataSign(dataSignService.sign(buildPromoterSignPayload(level)));
+
         promoterLevelMapper.update(null, new LambdaUpdateWrapper<PromoterLevel>()
                 .eq(PromoterLevel::getUserId, userId)
                 .setSql("paid_invite_count = paid_invite_count + 1")
-                .set(PromoterLevel::getUpdatedAt, LocalDateTime.now())
+                .set(PromoterLevel::getUpdatedAt, level.getUpdatedAt())
+                .set(PromoterLevel::getDataSign, level.getDataSign())
         );
+    }
+
+    public String buildPromoterSignPayload(PromoterLevel pl) {
+        return pl.getUserId() + "|" + pl.getPoints() + "|" + pl.getTotalPoints() + "|"
+                + pl.getAvailableBalance() + "|" + pl.getFrozenBalance() + "|" + pl.getWithdrawnAmount()
+                + "|" + pl.getTotalCommission() + "|" + pl.getLevel() + "|" + pl.getUpdatedAt();
     }
 
     private int getNextLevelInviteRequired(int currentLevel) {

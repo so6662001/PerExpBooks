@@ -51,7 +51,8 @@ public class PointsService {
                         .orderByDesc(PointsLog::getId)
                         .last("LIMIT 1")
         );
-        String previousHash = lastLog != null ? lastLog.getChainHash() : null;
+        String prevHash = (lastLog != null && lastLog.getChainHash() != null)
+                ? lastLog.getChainHash() : "GENESIS";
 
         int balanceAfter = level.getPoints() + points;
 
@@ -62,19 +63,31 @@ public class PointsService {
         logEntry.setAction(action);
         logEntry.setRefId(refId);
         logEntry.setRemark(remark);
+        logEntry.setPrevHash(prevHash);
         logEntry.setCreatedAt(LocalDateTime.now());
 
-        String payload = userId + "|" + points + "|" + balanceAfter + "|" + action + "|" + logEntry.getCreatedAt();
-        logEntry.setChainHash(chainHashService.computeChainHash(previousHash, payload));
-        logEntry.setDataSign(dataSignService.sign(payload));
-
         pointsLogMapper.insert(logEntry);
+
+        String chainPayload = logEntry.getId() + "|" + userId + "|" + points + "|" + balanceAfter
+                + "|" + action + "|" + prevHash + "|" + logEntry.getCreatedAt();
+        logEntry.setChainHash(chainHashService.computeHash(chainPayload));
+
+        String signPayload = userId + "|" + points + "|" + balanceAfter + "|" + action + "|" + logEntry.getCreatedAt();
+        logEntry.setDataSign(dataSignService.sign(signPayload));
+
+        pointsLogMapper.updateById(logEntry);
+
+        level.setPoints(level.getPoints() + points);
+        level.setTotalPoints(level.getTotalPoints() + points);
+        level.setUpdatedAt(LocalDateTime.now());
+        level.setDataSign(dataSignService.sign(promoterLevelService.buildPromoterSignPayload(level)));
 
         promoterLevelMapper.update(null, new LambdaUpdateWrapper<PromoterLevel>()
                 .eq(PromoterLevel::getUserId, userId)
                 .setSql("points = points + " + points)
                 .setSql("total_points = total_points + " + points)
-                .set(PromoterLevel::getUpdatedAt, LocalDateTime.now())
+                .set(PromoterLevel::getUpdatedAt, level.getUpdatedAt())
+                .set(PromoterLevel::getDataSign, level.getDataSign())
         );
 
         log.info("积分变动: userId={}, points={}, action={}, balanceAfter={}", userId, points, action, balanceAfter);
@@ -104,7 +117,8 @@ public class PointsService {
                         .orderByDesc(PointsLog::getId)
                         .last("LIMIT 1")
         );
-        String previousHash = lastLog != null ? lastLog.getChainHash() : null;
+        String prevHash = (lastLog != null && lastLog.getChainHash() != null)
+                ? lastLog.getChainHash() : "GENESIS";
 
         int balanceAfter = level.getPoints() - requiredPoints;
 
@@ -114,18 +128,29 @@ public class PointsService {
         logEntry.setBalanceAfter(balanceAfter);
         logEntry.setAction("redeem");
         logEntry.setRemark(remark);
+        logEntry.setPrevHash(prevHash);
         logEntry.setCreatedAt(LocalDateTime.now());
 
-        String payload = userId + "|" + (-requiredPoints) + "|" + balanceAfter + "|redeem|" + logEntry.getCreatedAt();
-        logEntry.setChainHash(chainHashService.computeChainHash(previousHash, payload));
-        logEntry.setDataSign(dataSignService.sign(payload));
-
         pointsLogMapper.insert(logEntry);
+
+        String chainPayload = logEntry.getId() + "|" + userId + "|" + (-requiredPoints) + "|" + balanceAfter
+                + "|redeem|" + prevHash + "|" + logEntry.getCreatedAt();
+        logEntry.setChainHash(chainHashService.computeHash(chainPayload));
+
+        String signPayload = userId + "|" + (-requiredPoints) + "|" + balanceAfter + "|redeem|" + logEntry.getCreatedAt();
+        logEntry.setDataSign(dataSignService.sign(signPayload));
+
+        pointsLogMapper.updateById(logEntry);
+
+        level.setPoints(balanceAfter);
+        level.setUpdatedAt(LocalDateTime.now());
+        level.setDataSign(dataSignService.sign(promoterLevelService.buildPromoterSignPayload(level)));
 
         promoterLevelMapper.update(null, new LambdaUpdateWrapper<PromoterLevel>()
                 .eq(PromoterLevel::getUserId, userId)
                 .set(PromoterLevel::getPoints, balanceAfter)
-                .set(PromoterLevel::getUpdatedAt, LocalDateTime.now())
+                .set(PromoterLevel::getUpdatedAt, level.getUpdatedAt())
+                .set(PromoterLevel::getDataSign, level.getDataSign())
         );
 
         log.info("积分兑换: userId={}, type={}, points={}, remark={}", userId, redeemType, -requiredPoints, remark);

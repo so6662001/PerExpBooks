@@ -184,10 +184,10 @@ public class AuditService {
         List<Map<String, Object>> alerts = new ArrayList<>();
 
         List<Map<String, Object>> expenses = jdbcTemplate.queryForList(
-                "SELECT id, user_id, amount, type, expense_date, invoice_no, data_sign FROM t_expense WHERE data_sign IS NOT NULL LIMIT 100");
+                "SELECT id, user_id, amount, reimburse_status, created_at, data_sign FROM t_expense WHERE data_sign IS NOT NULL LIMIT 100");
         for (Map<String, Object> row : expenses) {
             String payload = row.get("id") + "|" + row.get("user_id") + "|" + row.get("amount")
-                    + "|" + row.get("type") + "|" + row.get("expense_date") + "|" + row.get("invoice_no");
+                    + "|" + row.get("reimburse_status") + "|" + row.get("created_at");
             String storedSign = (String) row.get("data_sign");
             if (storedSign != null && !dataSignService.verify(payload, storedSign)) {
                 Map<String, Object> alert = new LinkedHashMap<>();
@@ -244,20 +244,19 @@ public class AuditService {
 
         int verified = 0;
         int failed = 0;
-        String previousHash = null;
         Long firstFailId = null;
 
         for (PointsLog logEntry : logs) {
-            String payload = logEntry.getUserId() + "|" + logEntry.getPoints() + "|"
-                    + logEntry.getBalanceAfter() + "|" + logEntry.getAction() + "|" + logEntry.getCreatedAt();
-            boolean chainValid = chainHashService.verifyChain(previousHash, payload, logEntry.getChainHash());
+            String prevHash = logEntry.getPrevHash() != null ? logEntry.getPrevHash() : "GENESIS";
+            String chainPayload = logEntry.getId() + "|" + logEntry.getUserId() + "|" + logEntry.getPoints() + "|"
+                    + logEntry.getBalanceAfter() + "|" + logEntry.getAction() + "|" + prevHash + "|" + logEntry.getCreatedAt();
+            boolean chainValid = chainHashService.verifyHash(chainPayload, logEntry.getChainHash());
             if (chainValid) {
                 verified++;
             } else {
                 failed++;
                 if (firstFailId == null) firstFailId = logEntry.getId();
             }
-            previousHash = logEntry.getChainHash();
         }
 
         result.put("totalRecords", logs.size());
@@ -297,13 +296,22 @@ public class AuditService {
     private String buildPayloadForTable(String table, Map<String, Object> row) {
         return switch (table) {
             case "t_expense" -> row.get("id") + "|" + row.get("user_id") + "|" + row.get("amount")
-                    + "|" + row.get("type") + "|" + row.get("expense_date") + "|" + row.get("invoice_no");
-            case "t_member_order" -> row.get("id") + "|" + row.get("user_id") + "|" + row.get("order_no")
-                    + "|" + row.get("plan_type") + "|" + row.get("pay_amount") + "|" + row.get("pay_status");
-            case "t_commission" -> row.get("user_id") + "|" + row.get("order_id") + "|" + row.get("invitee_id")
-                    + "|" + row.get("level") + "|" + row.get("commission_amount");
+                    + "|" + row.get("reimburse_status") + "|" + row.get("created_at");
+            case "t_member_order" -> row.get("id") + "|" + row.get("user_id") + "|" + row.get("pay_amount")
+                    + "|" + row.get("plan_type") + "|" + row.get("pay_status") + "|" + row.get("pay_time")
+                    + "|" + row.get("created_at");
+            case "t_commission" -> row.get("id") + "|" + row.get("user_id") + "|" + row.get("commission_amount")
+                    + "|" + row.get("commission_type") + "|" + row.get("order_id") + "|" + row.get("invitee_id")
+                    + "|" + row.get("status") + "|" + row.get("created_at");
+            case "t_withdrawal" -> row.get("id") + "|" + row.get("user_id") + "|" + row.get("amount")
+                    + "|" + row.get("status") + "|" + row.get("created_at");
             case "t_points_log" -> row.get("user_id") + "|" + row.get("points") + "|" + row.get("balance_after")
                     + "|" + row.get("action") + "|" + row.get("created_at");
+            case "t_user_coupon" -> row.get("id") + "|" + row.get("user_id") + "|" + row.get("discount_value")
+                    + "|" + row.get("use_status") + "|" + row.get("created_at");
+            case "t_promoter_level" -> row.get("user_id") + "|" + row.get("points") + "|" + row.get("total_points")
+                    + "|" + row.get("available_balance") + "|" + row.get("frozen_balance") + "|" + row.get("withdrawn_amount")
+                    + "|" + row.get("total_commission") + "|" + row.get("level") + "|" + row.get("updated_at");
             default -> throw new IllegalArgumentException("不支持校验的表: " + table);
         };
     }

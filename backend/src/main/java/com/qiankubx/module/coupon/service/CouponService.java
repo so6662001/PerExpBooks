@@ -3,6 +3,7 @@ package com.qiankubx.module.coupon.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.qiankubx.common.exception.BizException;
+import com.qiankubx.common.security.DataSignService;
 import com.qiankubx.module.coupon.dto.UserCouponVO;
 import com.qiankubx.module.coupon.entity.CouponTemplate;
 import com.qiankubx.module.coupon.entity.UserCoupon;
@@ -25,6 +26,7 @@ public class CouponService {
 
     private final CouponTemplateMapper couponTemplateMapper;
     private final UserCouponMapper userCouponMapper;
+    private final DataSignService dataSignService;
 
     public List<UserCouponVO> listMyCoupons(Long userId, Integer useStatus) {
         LambdaQueryWrapper<UserCoupon> wrapper = new LambdaQueryWrapper<UserCoupon>()
@@ -105,6 +107,7 @@ public class CouponService {
         coupon.setUseStatus(1);
         coupon.setOrderId(orderId);
         coupon.setUsedAt(LocalDateTime.now());
+        coupon.setDataSign(dataSignService.sign(buildCouponSignPayload(coupon)));
         userCouponMapper.updateById(coupon);
     }
 
@@ -176,6 +179,7 @@ public class CouponService {
         coupon.setUseStatus(0);
         coupon.setExpireAt(LocalDateTime.now().plusDays(30));
         coupon.setCreatedAt(LocalDateTime.now());
+        coupon.setDataSign(dataSignService.sign(buildCouponSignPayload(coupon)));
         userCouponMapper.insert(coupon);
         log.info("积分兑换优惠券发放: userId={}, amount={}", userId, amount);
     }
@@ -192,6 +196,7 @@ public class CouponService {
         coupon.setUseStatus(0);
         coupon.setExpireAt(LocalDateTime.now().plusDays(7));
         coupon.setCreatedAt(LocalDateTime.now());
+        coupon.setDataSign(dataSignService.sign(buildCouponSignPayload(coupon)));
         userCouponMapper.insert(coupon);
         log.info("会员唤回优惠券发放: userId={}", userId);
     }
@@ -208,7 +213,13 @@ public class CouponService {
         coupon.setUseStatus(0);
         coupon.setExpireAt(LocalDateTime.now().plusDays(template.getValidDays()));
         coupon.setCreatedAt(LocalDateTime.now());
+        coupon.setDataSign(dataSignService.sign(buildCouponSignPayload(coupon)));
         userCouponMapper.insert(coupon);
+    }
+
+    private String buildCouponSignPayload(UserCoupon coupon) {
+        return coupon.getId() + "|" + coupon.getUserId() + "|" + coupon.getDiscountValue()
+                + "|" + coupon.getUseStatus() + "|" + coupon.getCreatedAt();
     }
 
     private UserCouponVO toVO(UserCoupon coupon) {

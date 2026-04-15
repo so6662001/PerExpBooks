@@ -1,5 +1,6 @@
 package com.qiankubx.task;
 
+import com.qiankubx.common.security.TamperAlertService;
 import com.qiankubx.module.audit.service.AuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ public class ChainHashVerifyTask {
 
     private final JdbcTemplate jdbcTemplate;
     private final AuditService auditService;
+    private final TamperAlertService tamperAlertService;
 
     @Scheduled(cron = "0 30 4 * * ?")
     public void spotCheckChainHash() {
@@ -35,10 +37,14 @@ public class ChainHashVerifyTask {
                 if (!Boolean.TRUE.equals(result.get("verified"))) {
                     failed++;
                     log.warn("[定时任务] 链式哈希校验失败: userId={}", userId);
+                    tamperAlertService.alertUrgent("chain_hash_fail",
+                            "积分流水链式哈希校验失败", userId);
                 }
             } catch (Exception e) {
                 failed++;
                 log.error("[定时任务] 链式哈希校验异常: userId={}", userId, e);
+                tamperAlertService.alertWarning("chain_hash_error",
+                        "链式哈希校验异常: " + e.getMessage(), userId);
             }
         }
 

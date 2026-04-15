@@ -40,5 +40,7 @@ public class UserCoupon {
 
     private LocalDateTime expireAt;
 
+    private String dataSign;
+
     private LocalDateTime createdAt;
 }

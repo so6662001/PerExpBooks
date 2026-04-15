@@ -93,3 +93,4 @@ qianku:
       secret-key: ${BAIDU_OCR_SECRET_KEY:}
   security:
     sign-key: ${SIGN_KEY:qianku-data-sign-hmac-sha256-secret-key-32b}
+    aes-key: ${AES_SECRET_KEY:qianku2026aeskey}

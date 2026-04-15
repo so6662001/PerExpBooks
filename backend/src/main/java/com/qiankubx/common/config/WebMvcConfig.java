@@ -3,6 +3,7 @@ package com.qiankubx.common.config;
 import com.qiankubx.common.interceptor.AgreementInterceptor;
 import com.qiankubx.common.interceptor.AuthInterceptor;
 import com.qiankubx.common.interceptor.MemberInterceptor;
+import com.qiankubx.common.interceptor.RateLimitInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -13,6 +14,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @RequiredArgsConstructor
 public class WebMvcConfig implements WebMvcConfigurer {
 
+    private final RateLimitInterceptor rateLimitInterceptor;
     private final AuthInterceptor authInterceptor;
     private final AgreementInterceptor agreementInterceptor;
     private final MemberInterceptor memberInterceptor;
@@ -29,6 +31,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(rateLimitInterceptor)
+                .addPathPatterns("/api/v1/**")
+                .order(0);
+
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/v1/**")
                 .excludePathPatterns(

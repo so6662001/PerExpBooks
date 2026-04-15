@@ -22,6 +22,8 @@ public class WithdrawalVO {
 
     private String rejectReason;
 
+    private String accountInfo;
+
     private LocalDateTime processedAt;
 
     private LocalDateTime createdAt;

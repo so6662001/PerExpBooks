@@ -27,6 +27,8 @@ public class PointsLog {
 
     private String remark;
 
+    private String prevHash;
+
     private String chainHash;
 
     private String dataSign;
