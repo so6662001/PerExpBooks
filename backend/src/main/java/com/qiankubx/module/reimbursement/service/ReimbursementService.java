@@ -354,11 +354,18 @@ public class ReimbursementService {
         String dateStr = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         String prefix = "RB" + dateStr;
 
-        Long count = reimbursementMapper.selectCount(
-                new LambdaQueryWrapper<Reimbursement>()
-                        .likeRight(Reimbursement::getReimburseNo, prefix));
-
-        return prefix + String.format("%04d", count + 1);
+        for (int retry = 0; retry < 3; retry++) {
+            Long count = reimbursementMapper.selectCount(
+                    new LambdaQueryWrapper<Reimbursement>()
+                            .likeRight(Reimbursement::getReimburseNo, prefix));
+            String no = prefix + String.format("%04d", count + 1 + retry);
+            if (reimbursementMapper.selectCount(
+                    new LambdaQueryWrapper<Reimbursement>()
+                            .eq(Reimbursement::getReimburseNo, no)) == 0) {
+                return no;
+            }
+        }
+        return "RB" + dateStr + String.format("%04d", (int) (Math.random() * 9999));
     }
 
     private void updateExpensesReimburseStatus(List<Long> expenseIds, Long reimbursementId, int status) {

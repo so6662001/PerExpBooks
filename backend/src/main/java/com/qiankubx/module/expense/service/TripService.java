@@ -36,6 +36,9 @@ public class TripService {
 
     @Transactional(rollbackFor = Exception.class)
     public BusinessTrip createTrip(Long userId, TripCreateDTO dto) {
+        if (dto.getEndDate().isBefore(dto.getStartDate())) {
+            throw new BizException(400, "出差结束日期不能早于开始日期");
+        }
         BusinessTrip trip = new BusinessTrip();
         trip.setUserId(userId);
         trip.setTitle(dto.getTitle());
@@ -75,6 +78,9 @@ public class TripService {
 
     @Transactional(rollbackFor = Exception.class)
     public BusinessTrip updateTrip(Long userId, TripUpdateDTO dto) {
+        if (dto.getEndDate().isBefore(dto.getStartDate())) {
+            throw new BizException(400, "出差结束日期不能早于开始日期");
+        }
         BusinessTrip trip = getByIdAndUserId(dto.getId(), userId);
 
         trip.setTitle(dto.getTitle());

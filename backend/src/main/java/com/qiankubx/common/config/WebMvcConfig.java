@@ -1,5 +1,6 @@
 package com.qiankubx.common.config;
 
+import com.qiankubx.common.interceptor.AdminInterceptor;
 import com.qiankubx.common.interceptor.AgreementInterceptor;
 import com.qiankubx.common.interceptor.AuthInterceptor;
 import com.qiankubx.common.interceptor.MemberInterceptor;
@@ -18,6 +19,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     private final AuthInterceptor authInterceptor;
     private final AgreementInterceptor agreementInterceptor;
     private final MemberInterceptor memberInterceptor;
+    private final AdminInterceptor adminInterceptor;
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
@@ -91,5 +93,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/error"
                 )
                 .order(3);
+
+        registry.addInterceptor(adminInterceptor)
+                .addPathPatterns("/api/v1/admin/**")
+                .order(4);
     }
 }

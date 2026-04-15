@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -245,19 +246,18 @@ public class TeamService {
             return emptyResult;
         }
 
-        String inClause = memberUserIds.stream()
-                .map(String::valueOf)
-                .reduce((a, b) -> a + "," + b).orElse("0");
+        String placeholders = memberUserIds.stream().map(id -> "?").collect(Collectors.joining(","));
+        Object[] args = memberUserIds.toArray();
 
         Map<String, Object> expenseStats = jdbcTemplate.queryForMap(
                 "SELECT COALESCE(SUM(amount), 0) AS totalExpense, " +
                         "COALESCE(SUM(CASE WHEN reimburse_status = 2 THEN amount ELSE 0 END), 0) AS reimbursed, " +
                         "COALESCE(SUM(CASE WHEN reimburse_status != 2 THEN amount ELSE 0 END), 0) AS pendingReimburse " +
-                        "FROM t_expense WHERE user_id IN (" + inClause + ") AND status = 0");
+                        "FROM t_expense WHERE user_id IN (" + placeholders + ") AND status = 0", args);
 
         Integer tripDays = jdbcTemplate.queryForObject(
                 "SELECT COALESCE(SUM(DATEDIFF(COALESCE(end_date, start_date), start_date) + 1), 0) " +
-                        "FROM t_business_trip WHERE user_id IN (" + inClause + ") AND status = 0", Integer.class);
+                        "FROM t_business_trip WHERE user_id IN (" + placeholders + ") AND status = 0", args, Integer.class);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("memberCount", memberUserIds.size());

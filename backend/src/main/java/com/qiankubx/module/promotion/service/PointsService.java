@@ -43,54 +43,53 @@ public class PointsService {
 
     @Transactional(rollbackFor = Exception.class)
     public void addPoints(Long userId, int points, String action, Long refId, String remark) {
-        PromoterLevel level = promoterLevelService.getOrCreatePromoterLevel(userId);
+        String lockKey = "lock:points:" + userId;
+        Boolean locked = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", 10, TimeUnit.SECONDS);
+        if (!Boolean.TRUE.equals(locked)) {
+            throw new BizException(429, "操作过于频繁，请稍后再试");
+        }
+        try {
+            PromoterLevel level = promoterLevelService.getOrCreatePromoterLevel(userId);
 
-        PointsLog lastLog = pointsLogMapper.selectOne(
-                new LambdaQueryWrapper<PointsLog>()
-                        .eq(PointsLog::getUserId, userId)
-                        .orderByDesc(PointsLog::getId)
-                        .last("LIMIT 1")
-        );
-        String prevHash = (lastLog != null && lastLog.getChainHash() != null)
-                ? lastLog.getChainHash() : "GENESIS";
+            PointsLog lastLog = pointsLogMapper.selectOne(
+                    new LambdaQueryWrapper<PointsLog>()
+                            .eq(PointsLog::getUserId, userId)
+                            .orderByDesc(PointsLog::getId)
+                            .last("LIMIT 1")
+            );
+            String prevHash = (lastLog != null && lastLog.getChainHash() != null)
+                    ? lastLog.getChainHash() : "GENESIS";
 
-        int balanceAfter = level.getPoints() + points;
+            int balanceAfter = level.getPoints() + points;
 
-        PointsLog logEntry = new PointsLog();
-        logEntry.setUserId(userId);
-        logEntry.setPoints(points);
-        logEntry.setBalanceAfter(balanceAfter);
-        logEntry.setAction(action);
-        logEntry.setRefId(refId);
-        logEntry.setRemark(remark);
-        logEntry.setPrevHash(prevHash);
-        logEntry.setCreatedAt(LocalDateTime.now());
+            PointsLog logEntry = new PointsLog();
+            logEntry.setUserId(userId);
+            logEntry.setPoints(points);
+            logEntry.setBalanceAfter(balanceAfter);
+            logEntry.setAction(action);
+            logEntry.setRefId(refId);
+            logEntry.setRemark(remark);
+            logEntry.setPrevHash(prevHash);
+            logEntry.setCreatedAt(LocalDateTime.now());
 
-        pointsLogMapper.insert(logEntry);
+            pointsLogMapper.insert(logEntry);
 
-        String chainPayload = logEntry.getId() + "|" + userId + "|" + points + "|" + balanceAfter
-                + "|" + action + "|" + prevHash + "|" + logEntry.getCreatedAt();
-        logEntry.setChainHash(chainHashService.computeHash(chainPayload));
+            String chainPayload = logEntry.getId() + "|" + userId + "|" + points + "|" + balanceAfter
+                    + "|" + action + "|" + prevHash + "|" + logEntry.getCreatedAt();
+            logEntry.setChainHash(chainHashService.computeHash(chainPayload));
 
-        String signPayload = userId + "|" + points + "|" + balanceAfter + "|" + action + "|" + logEntry.getCreatedAt();
-        logEntry.setDataSign(dataSignService.sign(signPayload));
+            String signPayload = userId + "|" + points + "|" + balanceAfter + "|" + action + "|" + logEntry.getCreatedAt();
+            logEntry.setDataSign(dataSignService.sign(signPayload));
 
-        pointsLogMapper.updateById(logEntry);
+            pointsLogMapper.updateById(logEntry);
 
-        level.setPoints(level.getPoints() + points);
-        level.setTotalPoints(level.getTotalPoints() + points);
-        level.setUpdatedAt(LocalDateTime.now());
-        level.setDataSign(dataSignService.sign(promoterLevelService.buildPromoterSignPayload(level)));
+            int absPoints = Math.abs(points);
+            promoterLevelMapper.incrementPoints(userId, points, absPoints);
 
-        promoterLevelMapper.update(null, new LambdaUpdateWrapper<PromoterLevel>()
-                .eq(PromoterLevel::getUserId, userId)
-                .setSql("points = points + " + points)
-                .setSql("total_points = total_points + " + points)
-                .set(PromoterLevel::getUpdatedAt, level.getUpdatedAt())
-                .set(PromoterLevel::getDataSign, level.getDataSign())
-        );
-
-        log.info("积分变动: userId={}, points={}, action={}, balanceAfter={}", userId, points, action, balanceAfter);
+            log.info("积分变动: userId={}, points={}, action={}, balanceAfter={}", userId, points, action, balanceAfter);
+        } finally {
+            stringRedisTemplate.delete(lockKey);
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -193,6 +192,7 @@ public class PointsService {
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void recordDailyShare(Long userId) {
         String key = "daily_share:" + userId + ":" + LocalDate.now();
         Boolean alreadyShared = stringRedisTemplate.hasKey(key);

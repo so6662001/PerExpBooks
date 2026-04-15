@@ -208,18 +208,18 @@ public class CommissionService {
             return;
         }
 
-        commission.setStatus(1);
-        commission.setSettleTime(LocalDateTime.now());
-        commissionMapper.updateById(commission);
+        int affected = commissionMapper.update(null,
+                new LambdaUpdateWrapper<Commission>()
+                        .eq(Commission::getId, commissionId)
+                        .eq(Commission::getStatus, 0)
+                        .set(Commission::getStatus, 1)
+                        .set(Commission::getSettleTime, LocalDateTime.now()));
+        if (affected == 0) {
+            return;
+        }
 
         BigDecimal amount = commission.getCommissionAmount();
-        promoterLevelMapper.update(null, new LambdaUpdateWrapper<PromoterLevel>()
-                .eq(PromoterLevel::getUserId, commission.getUserId())
-                .setSql("frozen_balance = GREATEST(frozen_balance - " + amount + ", 0)")
-                .setSql("available_balance = available_balance + " + amount)
-                .setSql("total_commission = total_commission + " + amount)
-                .set(PromoterLevel::getUpdatedAt, LocalDateTime.now())
-        );
+        promoterLevelMapper.settleFrozenToAvailable(commission.getUserId(), amount);
 
         log.info("返佣结算: commissionId={}, userId={}, amount={}",
                 commissionId, commission.getUserId(), amount);
@@ -268,17 +268,9 @@ public class CommissionService {
 
             BigDecimal amount = c.getCommissionAmount();
             if (originalStatus == 0) {
-                promoterLevelMapper.update(null, new LambdaUpdateWrapper<PromoterLevel>()
-                        .eq(PromoterLevel::getUserId, c.getUserId())
-                        .setSql("frozen_balance = GREATEST(frozen_balance - " + amount + ", 0)")
-                        .set(PromoterLevel::getUpdatedAt, LocalDateTime.now())
-                );
+                promoterLevelMapper.decrementFrozenBalance(c.getUserId(), amount);
             } else {
-                promoterLevelMapper.update(null, new LambdaUpdateWrapper<PromoterLevel>()
-                        .eq(PromoterLevel::getUserId, c.getUserId())
-                        .setSql("available_balance = GREATEST(available_balance - " + amount + ", 0)")
-                        .set(PromoterLevel::getUpdatedAt, LocalDateTime.now())
-                );
+                promoterLevelMapper.decrementAvailableBalance(c.getUserId(), amount);
             }
 
             log.info("返佣撤销: commissionId={}, userId={}", c.getId(), c.getUserId());
@@ -286,11 +278,7 @@ public class CommissionService {
     }
 
     private void addFrozenBalance(Long userId, BigDecimal amount) {
-        promoterLevelMapper.update(null, new LambdaUpdateWrapper<PromoterLevel>()
-                .eq(PromoterLevel::getUserId, userId)
-                .setSql("frozen_balance = frozen_balance + " + amount)
-                .set(PromoterLevel::getUpdatedAt, LocalDateTime.now())
-        );
+        promoterLevelMapper.incrementFrozenBalance(userId, amount);
     }
 
     private void updateInvitationStatus(Long inviterId, Long inviteeId) {

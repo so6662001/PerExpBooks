@@ -1,5 +1,6 @@
 package com.qiankubx.module.stats.service;
 
+import com.qiankubx.common.exception.BizException;
 import com.qiankubx.module.stats.mapper.StatsMapper;
 import com.qiankubx.module.stats.vo.*;
 import jakarta.servlet.http.HttpServletResponse;
@@ -71,6 +72,9 @@ public class StatsService {
         }
         if (endDate == null || endDate.isBlank()) {
             endDate = LocalDate.now().toString();
+        }
+        if (LocalDate.parse(startDate).isAfter(LocalDate.parse(endDate))) {
+            throw new BizException(400, "开始日期不能晚于结束日期");
         }
 
         List<CategoryRatioVO> categories = statsMapper.selectCategoryRatio(userId, startDate, endDate);
@@ -163,6 +167,9 @@ public class StatsService {
         }
         if (endDate == null || endDate.isBlank()) {
             endDate = LocalDate.now().toString();
+        }
+        if (LocalDate.parse(startDate).isAfter(LocalDate.parse(endDate))) {
+            throw new BizException(400, "开始日期不能晚于结束日期");
         }
 
         List<Map<String, Object>> rows;

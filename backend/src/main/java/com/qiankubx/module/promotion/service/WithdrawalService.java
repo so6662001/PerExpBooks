@@ -1,7 +1,6 @@
 package com.qiankubx.module.promotion.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.qiankubx.common.exception.BizException;
 import com.qiankubx.common.security.DataSignService;
 import com.qiankubx.common.security.TamperAlertService;
@@ -14,6 +13,7 @@ import com.qiankubx.module.promotion.mapper.PromoterLevelMapper;
 import com.qiankubx.module.promotion.mapper.WithdrawalMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -34,6 +35,7 @@ public class WithdrawalService {
     private final AntiCheatService antiCheatService;
     private final TamperAlertService tamperAlertService;
     private final AesUtil aesUtil;
+    private final StringRedisTemplate stringRedisTemplate;
 
     @Transactional(rollbackFor = Exception.class)
     public void applyWithdraw(Long userId, BigDecimal amount, Integer withdrawType, String accountInfo) {
@@ -52,44 +54,45 @@ public class WithdrawalService {
 
         antiCheatService.assertWithdrawalNotFlagged(userId);
 
-        LocalDateTime monthStart = LocalDateTime.now().with(TemporalAdjusters.firstDayOfMonth()).withHour(0).withMinute(0).withSecond(0);
-        Long monthCount = withdrawalMapper.selectCount(
-                new LambdaQueryWrapper<Withdrawal>()
-                        .eq(Withdrawal::getUserId, userId)
-                        .ge(Withdrawal::getCreatedAt, monthStart)
-                        .ne(Withdrawal::getStatus, 2)
-        );
-        if (monthCount >= 2) {
-            throw new BizException(400, "每月最多提现2次");
+        String lockKey = "lock:withdraw:" + userId;
+        Boolean locked = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", 30, TimeUnit.SECONDS);
+        if (!Boolean.TRUE.equals(locked)) {
+            throw new BizException(429, "正在处理中，请勿重复操作");
         }
+        try {
+            LocalDateTime monthStart = LocalDateTime.now().with(TemporalAdjusters.firstDayOfMonth()).withHour(0).withMinute(0).withSecond(0);
+            Long monthCount = withdrawalMapper.selectCount(
+                    new LambdaQueryWrapper<Withdrawal>()
+                            .eq(Withdrawal::getUserId, userId)
+                            .ge(Withdrawal::getCreatedAt, monthStart)
+                            .ne(Withdrawal::getStatus, 2)
+            );
+            if (monthCount >= 2) {
+                throw new BizException(400, "每月最多提现2次");
+            }
 
-        level.setAvailableBalance(level.getAvailableBalance().subtract(amount));
-        level.setWithdrawnAmount(level.getWithdrawnAmount().add(amount));
-        level.setUpdatedAt(LocalDateTime.now());
-        level.setDataSign(dataSignService.sign(promoterLevelService.buildPromoterSignPayload(level)));
+            int affected = promoterLevelMapper.deductAvailableBalance(userId, amount);
+            if (affected == 0) {
+                throw new BizException(400, "可提现余额不足");
+            }
 
-        promoterLevelMapper.update(null, new LambdaUpdateWrapper<PromoterLevel>()
-                .eq(PromoterLevel::getUserId, userId)
-                .setSql("available_balance = available_balance - " + amount)
-                .setSql("withdrawn_amount = withdrawn_amount + " + amount)
-                .set(PromoterLevel::getUpdatedAt, level.getUpdatedAt())
-                .set(PromoterLevel::getDataSign, level.getDataSign())
-        );
+            Withdrawal withdrawal = new Withdrawal();
+            withdrawal.setUserId(userId);
+            withdrawal.setAmount(amount);
+            withdrawal.setWithdrawType(withdrawType);
+            withdrawal.setAccountInfo(aesUtil.encrypt(accountInfo));
+            withdrawal.setStatus(0);
+            withdrawal.setCreatedAt(LocalDateTime.now());
 
-        Withdrawal withdrawal = new Withdrawal();
-        withdrawal.setUserId(userId);
-        withdrawal.setAmount(amount);
-        withdrawal.setWithdrawType(withdrawType);
-        withdrawal.setAccountInfo(aesUtil.encrypt(accountInfo));
-        withdrawal.setStatus(0);
-        withdrawal.setCreatedAt(LocalDateTime.now());
+            String signPayload = withdrawal.getId() + "|" + userId + "|" + amount + "|" + withdrawal.getStatus() + "|" + withdrawal.getCreatedAt();
+            withdrawal.setDataSign(dataSignService.sign(signPayload));
 
-        String signPayload = withdrawal.getId() + "|" + userId + "|" + amount + "|" + withdrawal.getStatus() + "|" + withdrawal.getCreatedAt();
-        withdrawal.setDataSign(dataSignService.sign(signPayload));
+            withdrawalMapper.insert(withdrawal);
 
-        withdrawalMapper.insert(withdrawal);
-
-        log.info("提现申请: userId={}, amount={}, type={}", userId, amount, withdrawType);
+            log.info("提现申请: userId={}, amount={}, type={}", userId, amount, withdrawType);
+        } finally {
+            stringRedisTemplate.delete(lockKey);
+        }
     }
 
     public List<WithdrawalVO> listWithdrawals(Long userId) {
