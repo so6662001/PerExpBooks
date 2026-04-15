@@ -1,0 +1,205 @@
+<template>
+  <div class="page-container trip-detail">
+    <div class="page-header">
+      <div style="display: flex; align-items: center; gap: 12px">
+        <el-button @click="$router.back()" circle>
+          <el-icon><ArrowLeft /></el-icon>
+        </el-button>
+        <h2>出差详情</h2>
+      </div>
+      <el-tag v-if="trip" :type="tripStatusType(trip.status)" size="large">
+        {{ getStatusLabel(trip.status) }}
+      </el-tag>
+    </div>
+
+    <el-skeleton :loading="loading" :rows="8" animated>
+      <template #default>
+        <el-row :gutter="20" v-if="trip">
+          <el-col :span="16">
+            <el-card>
+              <template #header>
+                <span>基本信息</span>
+              </template>
+              <el-descriptions :column="2" border>
+                <el-descriptions-item label="目的地">{{ trip.destination }}</el-descriptions-item>
+                <el-descriptions-item label="天数">{{ trip.days }} 天</el-descriptions-item>
+                <el-descriptions-item label="开始日期">{{ trip.startDate }}</el-descriptions-item>
+                <el-descriptions-item label="结束日期">{{ trip.endDate }}</el-descriptions-item>
+                <el-descriptions-item label="标题" :span="2">{{ trip.title }}</el-descriptions-item>
+                <el-descriptions-item label="备注" :span="2">{{ trip.remark || '-' }}</el-descriptions-item>
+              </el-descriptions>
+            </el-card>
+
+            <el-card style="margin-top: 16px">
+              <template #header>
+                <div style="display: flex; justify-content: space-between; align-items: center">
+                  <span>关联费用 ({{ expenses.length }} 笔)</span>
+                  <el-button type="primary" size="small" @click="$router.push(`/expense/list?tripId=${trip.id}`)">
+                    查看全部
+                  </el-button>
+                </div>
+              </template>
+              <el-table :data="expenses" stripe>
+                <el-table-column prop="expenseDate" label="日期" width="120" />
+                <el-table-column prop="categoryName" label="分类" width="100">
+                  <template #default="{ row }">
+                    {{ row.categoryName || '-' }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
+                <el-table-column prop="amount" label="金额" width="120" align="right">
+                  <template #default="{ row }">
+                    {{ formatAmount(row.amount) }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="reimburseStatus" label="状态" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="row.reimburseStatus === 2 ? 'success' : 'warning'" size="small">
+                      {{ row.reimburseStatus === 0 ? '待报销' : row.reimburseStatus === 1 ? '报销中' : '已报销' }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
+          </el-col>
+
+          <el-col :span="8">
+            <el-card>
+              <template #header>
+                <span>费用汇总</span>
+              </template>
+              <div class="summary-items">
+                <div class="summary-item">
+                  <span class="label">每日补贴</span>
+                  <span class="value">{{ formatAmount(trip.subsidyPerDay) }}</span>
+                </div>
+                <div class="summary-item">
+                  <span class="label">补贴合计</span>
+                  <span class="value">{{ formatAmount(trip.subsidyTotal) }}</span>
+                </div>
+                <div class="summary-item">
+                  <span class="label">费用笔数</span>
+                  <span class="value">{{ trip.expenseCount }}</span>
+                </div>
+              </div>
+            </el-card>
+
+            <el-card style="margin-top: 16px">
+              <template #header>
+                <span>费用分布</span>
+              </template>
+              <div ref="chartRef" style="height: 250px" />
+            </el-card>
+          </el-col>
+        </el-row>
+      </template>
+    </el-skeleton>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
+import * as echarts from 'echarts'
+import {
+  getTripDetail,
+  formatAmount,
+  type TripVO,
+  type ExpenseVO,
+} from '@qianku/shared'
+
+const route = useRoute()
+const loading = ref(true)
+const trip = ref<TripVO | null>(null)
+const expenses = ref<ExpenseVO[]>([])
+const chartRef = ref<HTMLElement>()
+let chart: echarts.ECharts | null = null
+
+function tripStatusType(status: number) {
+  if (status === 0) return ''
+  if (status === 1) return 'info'
+  return 'info'
+}
+
+function getStatusLabel(status: number) {
+  if (status === 0) return '正常'
+  if (status === 1) return '已删除'
+  return '未知'
+}
+
+async function loadData() {
+  const id = route.params.id as string
+  loading.value = true
+  try {
+    const tripRes = await getTripDetail(id)
+    trip.value = tripRes
+    expenses.value = tripRes.expenses || []
+
+    await nextTick()
+    renderChart()
+  } catch {
+    // silent
+  } finally {
+    loading.value = false
+  }
+}
+
+function renderChart() {
+  if (!chartRef.value || expenses.value.length === 0) return
+  if (!chart) chart = echarts.init(chartRef.value)
+
+  const categoryMap: Record<string, number> = {}
+  expenses.value.forEach(e => {
+    const label = e.categoryName || e.description || '其他'
+    categoryMap[label] = (categoryMap[label] || 0) + e.amount
+  })
+
+  chart.setOption({
+    tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' },
+    series: [{
+      type: 'pie',
+      radius: ['35%', '60%'],
+      data: Object.entries(categoryMap).map(([name, value]) => ({ name, value })),
+      label: { show: true, formatter: '{b}\n{d}%', fontSize: 11 },
+    }],
+  })
+}
+
+onMounted(() => {
+  loadData()
+  window.addEventListener('resize', () => chart?.resize())
+})
+
+onBeforeUnmount(() => {
+  chart?.dispose()
+})
+</script>
+
+<style lang="scss" scoped>
+.trip-detail {
+  .summary-items {
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #f5f5f5;
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      .label {
+        font-size: 14px;
+        color: #86868b;
+      }
+
+      .value {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1d1d1f;
+      }
+    }
+  }
+}
+</style>

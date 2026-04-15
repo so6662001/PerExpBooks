@@ -1,0 +1,101 @@
+package com.qiankubx.common.config;
+
+import com.qiankubx.common.interceptor.AdminInterceptor;
+import com.qiankubx.common.interceptor.AgreementInterceptor;
+import com.qiankubx.common.interceptor.AuthInterceptor;
+import com.qiankubx.common.interceptor.MemberInterceptor;
+import com.qiankubx.common.interceptor.RateLimitInterceptor;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration
+@RequiredArgsConstructor
+public class WebMvcConfig implements WebMvcConfigurer {
+
+    private final RateLimitInterceptor rateLimitInterceptor;
+    private final AuthInterceptor authInterceptor;
+    private final AgreementInterceptor agreementInterceptor;
+    private final MemberInterceptor memberInterceptor;
+    private final AdminInterceptor adminInterceptor;
+
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/**")
+                .allowedOriginPatterns("*")
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                .allowedHeaders("*")
+                .allowCredentials(true)
+                .maxAge(3600);
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(rateLimitInterceptor)
+                .addPathPatterns("/api/v1/**")
+                .order(0);
+
+        registry.addInterceptor(authInterceptor)
+                .addPathPatterns("/api/v1/**")
+                .excludePathPatterns(
+                        "/api/v1/auth/**",
+                        "/api/v1/agreement/**",
+                        "/api/v1/member/wx-notify",
+                        "/api/v1/member/ali-notify",
+                        "/api/v1/member/plans",
+                        "/api/v1/analytics/report",
+                        "/api/v1/analytics/performance",
+                        "/api/v1/analytics/error",
+                        "/swagger-ui/**",
+                        "/swagger-ui.html",
+                        "/v3/api-docs/**",
+                        "/error"
+                )
+                .order(1);
+
+        registry.addInterceptor(agreementInterceptor)
+                .addPathPatterns("/api/v1/**")
+                .excludePathPatterns(
+                        "/api/v1/auth/**",
+                        "/api/v1/agreement/**",
+                        "/api/v1/user/profile",
+                        "/api/v1/user/member-status",
+                        "/api/v1/user/account",
+                        "/api/v1/analytics/report",
+                        "/api/v1/analytics/performance",
+                        "/api/v1/analytics/error",
+                        "/swagger-ui/**",
+                        "/swagger-ui.html",
+                        "/v3/api-docs/**",
+                        "/error"
+                )
+                .order(2);
+
+        registry.addInterceptor(memberInterceptor)
+                .addPathPatterns("/api/v1/**")
+                .excludePathPatterns(
+                        "/api/v1/auth/**",
+                        "/api/v1/agreement/**",
+                        "/api/v1/user/**",
+                        "/api/v1/member/**",
+                        "/api/v1/coupon/**",
+                        "/api/v1/team/**",
+                        "/api/v1/promotion/**",
+                        "/api/v1/withdrawal/**",
+                        "/api/v1/analytics/report",
+                        "/api/v1/analytics/performance",
+                        "/api/v1/analytics/error",
+                        "/swagger-ui/**",
+                        "/swagger-ui.html",
+                        "/v3/api-docs/**",
+                        "/error"
+                )
+                .order(3);
+
+        registry.addInterceptor(adminInterceptor)
+                .addPathPatterns("/api/v1/admin/**")
+                .order(4);
+    }
+}

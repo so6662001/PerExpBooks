@@ -1,0 +1,18 @@
+{
+  "appid": "wx0000000000000000",
+  "projectname": "qianku-miniprogram",
+  "description": "钱酷报销 - 个人费用报销管理",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true
+  },
+  "compileType": "miniprogram",
+  "libVersion": "3.3.4",
+  "packOptions": {
+    "ignore": []
+  },
+  "condition": {}
+}

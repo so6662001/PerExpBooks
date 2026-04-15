@@ -1,0 +1,110 @@
+package com.qiankubx.module.promotion.controller;
+
+import com.qiankubx.common.interceptor.AuthInterceptor;
+import com.qiankubx.common.response.Result;
+import com.qiankubx.module.promotion.dto.*;
+import com.qiankubx.module.promotion.entity.PromoterLevel;
+import com.qiankubx.module.promotion.service.*;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import lombok.Data;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/v1/promotion")
+@RequiredArgsConstructor
+public class PromotionController {
+
+    private final InviteService inviteService;
+    private final CommissionService commissionService;
+    private final PointsService pointsService;
+    private final PromoterLevelService promoterLevelService;
+    private final PosterService posterService;
+
+    @GetMapping("/dashboard")
+    public Result<DashboardVO> dashboard(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+
+        LevelInfoVO levelInfo = promoterLevelService.getLevelInfo(userId);
+        PromoterLevel level = promoterLevelService.getOrCreatePromoterLevel(userId);
+
+        DashboardVO vo = new DashboardVO();
+        vo.setLevelInfo(levelInfo);
+        vo.setTotalCommission(level.getTotalCommission());
+        vo.setAvailableBalance(level.getAvailableBalance());
+        vo.setFrozenBalance(level.getFrozenBalance());
+        vo.setPoints(level.getPoints());
+        vo.setTotalInvite(level.getInviteCount());
+        vo.setPaidInvite(level.getPaidInviteCount());
+
+        return Result.ok(vo);
+    }
+
+    @GetMapping("/invite-code")
+    public Result<InviteCodeVO> getInviteCode(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        return Result.ok(inviteService.getInviteCode(userId));
+    }
+
+    @GetMapping("/invite-records")
+    public Result<List<InviteRecordVO>> inviteRecords(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        return Result.ok(inviteService.listInviteRecords(userId));
+    }
+
+    @GetMapping("/commission")
+    public Result<List<CommissionVO>> commission(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        return Result.ok(commissionService.listCommissions(userId));
+    }
+
+    @GetMapping("/points-log")
+    public Result<List<PointsLogVO>> pointsLog(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        return Result.ok(pointsService.getPointsLog(userId));
+    }
+
+    @PostMapping("/points/redeem")
+    public Result<Void> redeemPoints(HttpServletRequest request,
+                                      @Valid @RequestBody RedeemDTO dto) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        pointsService.redeemPoints(userId, dto.getRedeemType());
+        return Result.ok();
+    }
+
+    @GetMapping("/level-info")
+    public Result<LevelInfoVO> levelInfo(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        return Result.ok(promoterLevelService.getLevelInfo(userId));
+    }
+
+    @GetMapping("/poster")
+    public Result<Map<String, Object>> poster(HttpServletRequest request,
+                                               @RequestParam(defaultValue = "invite") String type) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        return Result.ok(posterService.generateInvitePoster(userId));
+    }
+
+    @PostMapping("/poster/custom")
+    public Result<Map<String, Object>> customPoster(HttpServletRequest request,
+                                                     @RequestBody PosterCustomDTO dto) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        return Result.ok(posterService.generateSocialCard(userId, dto.getCardType()));
+    }
+
+    @PostMapping("/daily-share")
+    public Result<Void> recordDailyShare(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        pointsService.recordDailyShare(userId);
+        return Result.ok();
+    }
+
+    @Data
+    public static class PosterCustomDTO {
+        private String cardType;
+    }
+}

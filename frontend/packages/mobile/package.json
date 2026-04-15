@@ -1,0 +1,27 @@
+{
+  "name": "@qianku/mobile",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@qianku/shared": "workspace:*",
+    "echarts": "^5.5.0",
+    "pinia": "^2.2.0",
+    "vant": "^4.9.0",
+    "vue": "^3.5.0",
+    "vue-router": "^4.4.0"
+  },
+  "devDependencies": {
+    "@vant/auto-import-resolver": "^1.2.0",
+    "@vitejs/plugin-vue": "^5.1.0",
+    "sass": "^1.77.0",
+    "typescript": "^5.5.0",
+    "unplugin-vue-components": "^0.27.0",
+    "vite": "^5.4.0",
+    "vue-tsc": "^2.1.0"
+  }
+}
