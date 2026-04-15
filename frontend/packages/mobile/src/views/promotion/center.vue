@@ -12,17 +12,28 @@ import {
   formatAmount,
   formatDate,
   copyToClipboard,
+  useUserStore,
 } from '@qianku/shared'
 import type { DashboardVO, InviteCodeVO, InviteRecordVO } from '@qianku/shared'
 import { Tracker } from '@qianku/shared/analytics'
+import SharePoster from '@/components/SharePoster.vue'
+import type { PosterData } from '@/components/SharePoster.vue'
 
 const router = useRouter()
+const userStore = useUserStore()
 const dashboard = ref<DashboardVO | null>(null)
 const codeInfo = ref<InviteCodeVO | null>(null)
 const records = ref<InviteRecordVO[]>([])
 const loading = ref(true)
 const showShareGuide = ref(false)
 const shareGuideMessage = ref('')
+const showPoster = ref(false)
+const posterData = ref<PosterData>({
+  type: 'invite',
+  nickname: '',
+  inviteCode: '',
+  qrCodeUrl: '',
+})
 
 onMounted(async () => {
   try {
@@ -59,9 +70,16 @@ async function copyInviteLink() {
 
 async function generatePoster() {
   try {
-    const result = await getPoster({ type: 'invite' })
+    await getPoster({ type: 'invite' })
     try { Tracker.getInstance().track('share_poster_generate') } catch {}
-    showToast({ message: '海报已生成', type: 'success' })
+    const code = codeInfo.value
+    posterData.value = {
+      type: 'invite',
+      nickname: userStore.userInfo?.nickname || '用户',
+      inviteCode: code?.inviteCode || '',
+      qrCodeUrl: code?.inviteLink || '',
+    }
+    showPoster.value = true
   } catch (e: any) {
     showToast(e.message || '生成失败')
   }
@@ -81,7 +99,17 @@ async function recordDailyShareAndTrack() {
 async function generateCard(cardType: string) {
   try {
     await generateCustomCard({ cardType })
-    showToast({ message: '卡片已生成', type: 'success' })
+    const code = codeInfo.value
+    posterData.value = {
+      type: cardType as PosterData['type'],
+      nickname: userStore.userInfo?.nickname || '用户',
+      inviteCode: code?.inviteCode || '',
+      qrCodeUrl: code?.inviteLink || '',
+      totalExpense: dashboard.value?.totalCommission,
+      totalTrips: dashboard.value?.totalInvite,
+      totalDays: dashboard.value?.paidInvite,
+    }
+    showPoster.value = true
   } catch (e: any) {
     showToast(e.message || '生成失败')
   }
@@ -195,6 +223,8 @@ async function generateCard(cardType: string) {
         </van-button>
       </div>
     </van-popup>
+
+    <SharePoster v-model="showPoster" :poster-data="posterData" />
   </div>
 </template>
 
