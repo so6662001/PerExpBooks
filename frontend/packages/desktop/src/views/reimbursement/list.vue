@@ -8,10 +8,10 @@
     </div>
 
     <div class="filter-bar">
-      <el-select v-model="query.status" placeholder="状态" clearable style="width: 120px" @change="loadData">
-        <el-option label="已生成" value="generated" />
-        <el-option label="已导出" value="exported" />
-        <el-option label="已收款" value="received" />
+      <el-select v-model="query.reimburseStatus" placeholder="状态" clearable style="width: 120px" @change="loadData">
+        <el-option label="已生成" :value="0" />
+        <el-option label="已导出" :value="1" />
+        <el-option label="已收款" :value="2" />
       </el-select>
     </div>
 
@@ -23,10 +23,10 @@
           <span class="amount">{{ formatAmount(row.totalAmount) }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="status" label="状态" width="100">
+      <el-table-column prop="reimburseStatus" label="状态" width="100">
         <template #default="{ row }">
-          <el-tag :type="reimStatusType(row.status)" size="small">
-            {{ getStatusLabel(row.status) }}
+          <el-tag :type="reimStatusType(row.reimburseStatus)" size="small">
+            {{ getStatusLabel(row.reimburseStatus) }}
           </el-tag>
         </template>
       </el-table-column>
@@ -47,7 +47,7 @@
             link
             type="success"
             size="small"
-            v-if="row.status === 'exported'"
+            v-if="row.reimburseStatus === 1"
             @click="handleReceived(row)"
           >
             确认收款
@@ -89,16 +89,16 @@ const total = ref(0)
 const query = reactive<ReimbursementQueryDTO>({
   pageNum: 1,
   pageSize: 10,
-  status: undefined,
+  reimburseStatus: undefined,
 })
 
-function reimStatusType(status: string) {
-  const map: Record<string, string> = {
-    generated: '',
-    exported: 'warning',
-    received: 'success',
+function reimStatusType(status: number) {
+  const map: Record<number, string> = {
+    0: '',
+    1: 'warning',
+    2: 'success',
   }
-  return (map[status] || 'info') as any
+  return (map[status] ?? 'info') as any
 }
 
 async function loadData() {

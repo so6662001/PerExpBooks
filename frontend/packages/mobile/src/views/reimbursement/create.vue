@@ -21,6 +21,12 @@ const totalAmount = computed(() =>
 
 const selectedCount = computed(() => selectedIds.value.length)
 
+const invoiceFileCount = computed(() =>
+  pendingExpenses.value
+    .filter((e) => selectedIds.value.includes(e.id) && e.fileUrl)
+    .length,
+)
+
 const canSubmit = computed(() =>
   selectedIds.value.length > 0 && title.value.trim() && !creating.value,
 )
@@ -112,7 +118,11 @@ async function handleCreate() {
         />
         <div class="check-item-info">
           <div class="check-item-name">{{ expense.categoryName || expense.description || '费用' }}</div>
-          <div class="check-item-date">{{ formatDate(expense.expenseDate) }}</div>
+          <div class="check-item-date">
+            {{ formatDate(expense.expenseDate) }}
+            <span v-if="expense.fileUrl" style="color:#34C759; margin-left: 6px">有发票原件</span>
+            <span v-else style="color:#8E8E93; margin-left: 6px">无发票</span>
+          </div>
         </div>
         <div class="check-item-amount amount">{{ formatAmount(expense.amount) }}</div>
       </div>
@@ -125,7 +135,7 @@ async function handleCreate() {
 
     <div class="submit-bar">
       <div class="summary">
-        <span>已选 {{ selectedCount }} 项</span>
+        <span>已选 {{ selectedCount }} 项，含 {{ invoiceFileCount }} 张发票原件</span>
         <span class="total-amount amount">合计 {{ formatAmount(totalAmount) }}</span>
       </div>
       <van-button

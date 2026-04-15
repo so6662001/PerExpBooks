@@ -29,6 +29,12 @@
               </template>
             </el-table-column>
             <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
+            <el-table-column label="发票原件" width="100" align="center">
+              <template #default="{ row }">
+                <el-tag v-if="row.fileUrl" type="success" size="small">有原件</el-tag>
+                <el-tag v-else type="info" size="small">无发票</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column prop="amount" label="金额" width="110" align="right">
               <template #default="{ row }">
                 {{ formatAmount(row.amount) }}
@@ -58,6 +64,10 @@
             <div class="summary-row">
               <span>已选费用</span>
               <span>{{ selectedExpenses.length }} 笔</span>
+            </div>
+            <div class="summary-row">
+              <span>发票原件</span>
+              <span>{{ invoiceFileCount }} 张</span>
             </div>
             <div class="summary-row total">
               <span>合计金额</span>
@@ -108,6 +118,10 @@ const form = ref({
 
 const totalAmount = computed(() =>
   selectedExpenses.value.reduce((sum, e) => sum + e.amount, 0)
+)
+
+const invoiceFileCount = computed(() =>
+  selectedExpenses.value.filter(e => e.fileUrl).length
 )
 
 function handleSelectionChange(rows: ExpenseVO[]) {

@@ -1,4 +1,4 @@
-import { get, post, put } from './request'
+import { get, post, put, del } from './request'
 import type { ReimbursementCreateDTO, ReimbursementVO, ExportOptions } from '../types/reimbursement'
 
 export const generateReimbursement = (data: ReimbursementCreateDTO) =>
@@ -35,6 +35,9 @@ export const sendEmail = (id: number | string, data: { email: string; attachType
 export const regenerateReimbursement = (id: number | string) =>
   post<ReimbursementVO>(`/reimbursement/${id}/regenerate`)
 
+export const cancelReimbursement = (id: number | string) =>
+  del(`/reimbursement/${id}`)
+
 export const exportReimbursement = async (id: number | string, options: ExportOptions) => {
   if (options.type === 'merged_pdf') {
     const url = await getMergedPdfUrl(id)
@@ -46,7 +49,7 @@ export const exportReimbursement = async (id: number | string, options: ExportOp
     const url = await getPdfUrl(id)
     return { url }
   } else if (options.type === 'email' && options.email) {
-    await sendEmail(id, { email: options.email })
+    await sendEmail(id, { email: options.email, attachType: options.attachType })
     return {}
   }
   return {}

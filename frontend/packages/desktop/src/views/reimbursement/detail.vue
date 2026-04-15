@@ -8,18 +8,32 @@
         <h2>报销单详情</h2>
       </div>
       <div class="header-actions" v-if="detail">
+        <el-button @click="handleExport('report_only')">
+          <el-icon><Document /></el-icon>仅报销单PDF
+        </el-button>
         <el-button @click="handleExport('merged_pdf')">
           <el-icon><Download /></el-icon>导出PDF
         </el-button>
         <el-button @click="handleExport('zip')">
           <el-icon><FolderOpened /></el-icon>导出ZIP
         </el-button>
+        <el-button @click="showEmailDialog = true">
+          <el-icon><Message /></el-icon>发送到邮箱
+        </el-button>
         <el-button
           type="success"
-          v-if="detail.status === 'exported'"
+          v-if="detail.reimburseStatus === 1"
           @click="handleReceived"
         >
           确认收款
+        </el-button>
+        <el-button
+          type="danger"
+          plain
+          v-if="detail.reimburseStatus !== 2"
+          @click="handleCancel"
+        >
+          取消报销单
         </el-button>
       </div>
     </div>
@@ -39,7 +53,7 @@
                 </el-descriptions-item>
                 <el-descriptions-item label="笔数">{{ detail.itemCount }} 笔</el-descriptions-item>
                 <el-descriptions-item label="状态">
-                  <el-tag :type="statusType(detail.status)">{{ getStatusLabel(detail.status) }}</el-tag>
+                  <el-tag :type="statusType(detail.reimburseStatus)">{{ getStatusLabel(detail.reimburseStatus) }}</el-tag>
                 </el-descriptions-item>
                 <el-descriptions-item label="创建时间">
                   {{ formatDate(detail.createdAt, 'YYYY-MM-DD HH:mm') }}
@@ -100,7 +114,7 @@
                   已导出于 {{ formatDate(detail.exportedAt, 'YYYY-MM-DD HH:mm') }}
                 </el-timeline-item>
                 <el-timeline-item
-                  v-if="detail.status === 'received'"
+                  v-if="detail.reimburseStatus === 2"
                   timestamp="收款"
                   placement="top"
                   color="#34C759"
@@ -113,6 +127,24 @@
         </el-row>
       </template>
     </el-skeleton>
+
+    <el-dialog v-model="showEmailDialog" title="发送到邮箱" width="440px">
+      <el-form label-width="80px">
+        <el-form-item label="邮箱">
+          <el-input v-model="emailInput" placeholder="请输入接收邮箱" />
+        </el-form-item>
+        <el-form-item label="附件类型">
+          <el-radio-group v-model="emailAttachType">
+            <el-radio :value="1">合并PDF (推荐)</el-radio>
+            <el-radio :value="2">ZIP压缩包</el-radio>
+          </el-radio-group>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showEmailDialog = false">取消</el-button>
+        <el-button type="primary" :disabled="!emailInput" @click="handleSendEmail">发送</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -124,6 +156,8 @@ import {
   getReimbursementDetail,
   exportReimbursement,
   markReceived,
+  cancelReimbursement,
+  sendEmail,
   formatAmount,
   formatDate,
   getCategoryLabel,
@@ -137,11 +171,14 @@ const route = useRoute()
 const loading = ref(true)
 const detail = ref<ReimbursementVO | null>(null)
 const chartRef = ref<HTMLElement>()
+const showEmailDialog = ref(false)
+const emailInput = ref('')
+const emailAttachType = ref(1)
 let chart: echarts.ECharts | null = null
 
-function statusType(status: string) {
-  const map: Record<string, string> = { generated: '', exported: 'warning', received: 'success' }
-  return (map[status] || 'info') as any
+function statusType(status: number) {
+  const map: Record<number, string> = { 0: '', 1: 'warning', 2: 'success' }
+  return (map[status] ?? 'info') as any
 }
 
 async function loadData() {
@@ -178,15 +215,30 @@ function renderChart() {
   })
 }
 
-async function handleExport(type: 'merged_pdf' | 'zip') {
+async function handleExport(type: 'merged_pdf' | 'zip' | 'report_only') {
   if (!detail.value) return
   try {
     const res = await exportReimbursement(detail.value.id, { type })
     if (res.url) window.open(res.url, '_blank')
     ElMessage.success('导出成功')
     loadData()
-  } catch {
-    ElMessage.error('导出失败')
+  } catch (e: any) {
+    ElMessage.error(e.message || '导出失败')
+  }
+}
+
+async function handleSendEmail() {
+  if (!detail.value || !emailInput.value) return
+  try {
+    await sendEmail(detail.value.id, {
+      email: emailInput.value,
+      attachType: emailAttachType.value,
+    })
+    ElMessage.success('已发送至邮箱')
+    showEmailDialog.value = false
+    loadData()
+  } catch (e: any) {
+    ElMessage.error(e.message || '发送失败')
   }
 }
 
@@ -196,6 +248,18 @@ async function handleReceived() {
     await ElMessageBox.confirm('确认已收到报销款项？', '提示')
     await markReceived(detail.value.id)
     ElMessage.success('已确认收款')
+    loadData()
+  } catch {
+    // cancelled
+  }
+}
+
+async function handleCancel() {
+  if (!detail.value) return
+  try {
+    await ElMessageBox.confirm('确认取消此报销单？关联的费用将恢复为待报销状态。', '取消报销单')
+    await cancelReimbursement(detail.value.id)
+    ElMessage.success('已取消报销单')
     loadData()
   } catch {
     // cancelled

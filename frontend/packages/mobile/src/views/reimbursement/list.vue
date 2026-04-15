@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { listReimbursements, formatAmount, formatDate } from '@qianku/shared'
 import type { ReimbursementVO } from '@qianku/shared'
@@ -7,7 +7,7 @@ import type { ReimbursementVO } from '@qianku/shared'
 defineOptions({ name: 'ReimbursementList' })
 
 const router = useRouter()
-const activeTab = ref<string>('generated')
+const activeTab = ref<number>(0)
 const list = ref<ReimbursementVO[]>([])
 const loading = ref(false)
 const finished = ref(false)
@@ -15,9 +15,9 @@ const refreshing = ref(false)
 const pageNum = ref(1)
 
 const tabs = [
-  { name: 'generated', title: '已生成' },
-  { name: 'exported', title: '已导出' },
-  { name: 'received', title: '已收款' },
+  { name: 0, title: '已生成' },
+  { name: 1, title: '已导出' },
+  { name: 2, title: '已收款' },
 ]
 
 async function loadData(isRefresh = false) {
@@ -27,7 +27,7 @@ async function loadData(isRefresh = false) {
   }
   loading.value = true
   try {
-    const result = await listReimbursements()
+    const result = await listReimbursements({ reimburseStatus: activeTab.value })
     const allItems = Array.isArray(result) ? result : (result as any).list || []
     if (isRefresh) {
       list.value = allItems

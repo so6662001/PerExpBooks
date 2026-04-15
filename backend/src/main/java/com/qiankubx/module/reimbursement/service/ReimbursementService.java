@@ -6,7 +6,9 @@ import com.qiankubx.common.exception.BizException;
 import com.qiankubx.common.response.ResultCode;
 import com.qiankubx.module.expense.dto.ExpenseVO;
 import com.qiankubx.module.expense.entity.Expense;
+import com.qiankubx.module.expense.entity.ExpenseCategory;
 import com.qiankubx.common.security.DataSignService;
+import com.qiankubx.module.expense.mapper.ExpenseCategoryMapper;
 import com.qiankubx.module.expense.mapper.ExpenseMapper;
 import com.qiankubx.module.expense.service.ExpenseService;
 import com.qiankubx.module.reimbursement.dto.*;
@@ -17,15 +19,20 @@ import com.qiankubx.module.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Lazy;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -34,11 +41,13 @@ public class ReimbursementService {
 
     private final ReimbursementMapper reimbursementMapper;
     private final ExpenseMapper expenseMapper;
+    private final ExpenseCategoryMapper expenseCategoryMapper;
     private final UserMapper userMapper;
     private final PdfCoverService pdfCoverService;
     private final PdfMergeService pdfMergeService;
     private final ZipPackageService zipPackageService;
     private final EmailSendService emailSendService;
+    private final RedisTemplate<String, Object> redisTemplate;
     private final @Lazy DataSignService dataSignService;
     private final @Lazy ExpenseService expenseService;
 
@@ -52,8 +61,8 @@ public class ReimbursementService {
                 .map(Expense::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        long invoiceCount = expenses.stream()
-                .filter(e -> e.getInvoiceNo() != null && !e.getInvoiceNo().isBlank())
+        int invoiceCount = (int) expenses.stream()
+                .filter(e -> e.getFileUrl() != null && !e.getFileUrl().isEmpty())
                 .count();
 
         String reimburseNo = generateReimburseNo();
@@ -63,7 +72,7 @@ public class ReimbursementService {
         reimbursement.setReimburseNo(reimburseNo);
         reimbursement.setTitle(dto.getTitle());
         reimbursement.setTotalAmount(totalAmount);
-        reimbursement.setInvoiceCount((int) invoiceCount);
+        reimbursement.setInvoiceCount(invoiceCount);
         reimbursement.setItemCount(expenses.size());
         reimbursement.setRemark(dto.getRemark());
         reimbursement.setTripId(dto.getTripId());
@@ -79,12 +88,16 @@ public class ReimbursementService {
         updateExpensesReimburseStatus(dto.getExpenseIds(), reimbursement.getId(), 1);
 
         User user = userMapper.selectById(userId);
+        Map<Long, String> categoryMap = buildCategoryMap();
 
-        String coverUrl = pdfCoverService.generateCoverPdf(reimbursement, user, expenses);
+        String coverUrl = pdfCoverService.generateCoverPdf(reimbursement, user, expenses, categoryMap);
         reimbursement.setPdfUrl(coverUrl);
 
         String mergedUrl = pdfMergeService.mergePdfs(reimbursement, expenses);
         reimbursement.setMergedPdfUrl(mergedUrl);
+
+        String zipUrl = zipPackageService.generateZip(reimbursement, expenses, mergedUrl);
+        reimbursement.setZipUrl(zipUrl);
 
         reimbursementMapper.updateById(reimbursement);
 
@@ -93,13 +106,15 @@ public class ReimbursementService {
         return toVO(reimbursement, expenses);
     }
 
-    public List<ReimbursementVO> list(Long userId) {
-        List<Reimbursement> reimbursements = reimbursementMapper.selectList(
-                new LambdaQueryWrapper<Reimbursement>()
-                        .eq(Reimbursement::getUserId, userId)
-                        .eq(Reimbursement::getStatus, 0)
-                        .orderByDesc(Reimbursement::getCreatedAt));
-
+    public List<ReimbursementVO> list(Long userId, Integer reimburseStatus) {
+        LambdaQueryWrapper<Reimbursement> wrapper = new LambdaQueryWrapper<Reimbursement>()
+                .eq(Reimbursement::getUserId, userId)
+                .eq(Reimbursement::getStatus, 0)
+                .orderByDesc(Reimbursement::getCreatedAt);
+        if (reimburseStatus != null) {
+            wrapper.eq(Reimbursement::getReimburseStatus, reimburseStatus);
+        }
+        List<Reimbursement> reimbursements = reimbursementMapper.selectList(wrapper);
         return reimbursements.stream().map(r -> toVO(r, null)).toList();
     }
 
@@ -131,20 +146,37 @@ public class ReimbursementService {
             BigDecimal totalAmount = newExpenses.stream()
                     .map(Expense::getAmount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            long invoiceCount = newExpenses.stream()
-                    .filter(e -> e.getInvoiceNo() != null && !e.getInvoiceNo().isBlank())
+            int invoiceCount = (int) newExpenses.stream()
+                    .filter(e -> e.getFileUrl() != null && !e.getFileUrl().isEmpty())
                     .count();
 
             reimbursement.setTotalAmount(totalAmount);
-            reimbursement.setInvoiceCount((int) invoiceCount);
+            reimbursement.setInvoiceCount(invoiceCount);
             reimbursement.setItemCount(newExpenses.size());
         }
 
         reimbursement.setUpdatedAt(LocalDateTime.now());
+
+        List<Expense> updatedExpenses = getRelatedExpenses(reimbursement.getId());
+        User user = userMapper.selectById(userId);
+        Map<Long, String> categoryMap = buildCategoryMap();
+
+        reimbursement.setPdfUrl(null);
+        reimbursement.setMergedPdfUrl(null);
+        reimbursement.setZipUrl(null);
+
+        String pdfUrl = pdfCoverService.generateCoverPdf(reimbursement, user, updatedExpenses, categoryMap);
+        reimbursement.setPdfUrl(pdfUrl);
+
+        String mergedPdfUrl = pdfMergeService.mergePdfs(reimbursement, updatedExpenses);
+        reimbursement.setMergedPdfUrl(mergedPdfUrl);
+
+        String zipUrl = zipPackageService.generateZip(reimbursement, updatedExpenses, mergedPdfUrl);
+        reimbursement.setZipUrl(zipUrl);
+
         reimbursementMapper.updateById(reimbursement);
 
-        List<Expense> expenses = getRelatedExpenses(reimbursement.getId());
-        return toVO(reimbursement, expenses);
+        return toVO(reimbursement, updatedExpenses);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -173,12 +205,16 @@ public class ReimbursementService {
         Reimbursement reimbursement = getByIdAndUser(id, userId);
         List<Expense> expenses = getRelatedExpenses(reimbursement.getId());
         User user = userMapper.selectById(userId);
+        Map<Long, String> categoryMap = buildCategoryMap();
 
-        String coverUrl = pdfCoverService.generateCoverPdf(reimbursement, user, expenses);
+        String coverUrl = pdfCoverService.generateCoverPdf(reimbursement, user, expenses, categoryMap);
         reimbursement.setPdfUrl(coverUrl);
 
         String mergedUrl = pdfMergeService.mergePdfs(reimbursement, expenses);
         reimbursement.setMergedPdfUrl(mergedUrl);
+
+        String zipUrl = zipPackageService.generateZip(reimbursement, expenses, mergedUrl);
+        reimbursement.setZipUrl(zipUrl);
 
         reimbursement.setUpdatedAt(LocalDateTime.now());
         reimbursementMapper.updateById(reimbursement);
@@ -191,7 +227,7 @@ public class ReimbursementService {
         if (reimbursement.getPdfUrl() == null || reimbursement.getPdfUrl().isBlank()) {
             throw new BizException(ResultCode.NOT_FOUND.getCode(), "报销单PDF尚未生成");
         }
-        incrementExportCount(reimbursement);
+        markExported(reimbursement);
         return reimbursement.getPdfUrl();
     }
 
@@ -200,35 +236,58 @@ public class ReimbursementService {
         if (reimbursement.getMergedPdfUrl() == null || reimbursement.getMergedPdfUrl().isBlank()) {
             throw new BizException(ResultCode.NOT_FOUND.getCode(), "合并PDF尚未生成");
         }
-        incrementExportCount(reimbursement);
+        markExported(reimbursement);
         return reimbursement.getMergedPdfUrl();
     }
 
     @Transactional(rollbackFor = Exception.class)
     public String getZipUrl(Long userId, Long id) {
+        User user = userMapper.selectById(userId);
+        if (user.getMemberStatus() == null || user.getMemberStatus() == 0) {
+            throw new BizException(ResultCode.MEMBER_REQUIRED.getCode(), "ZIP打包导出为会员专属功能，请升级会员");
+        }
+
         Reimbursement reimbursement = getByIdAndUser(id, userId);
 
         if (reimbursement.getZipUrl() == null || reimbursement.getZipUrl().isBlank()) {
             List<Expense> expenses = getRelatedExpenses(reimbursement.getId());
-            String zipUrl = zipPackageService.generateZip(reimbursement, expenses);
+            String mergedPdfUrl = reimbursement.getMergedPdfUrl();
+            String zipUrl = zipPackageService.generateZip(reimbursement, expenses, mergedPdfUrl);
             reimbursement.setZipUrl(zipUrl);
             reimbursement.setUpdatedAt(LocalDateTime.now());
             reimbursementMapper.updateById(reimbursement);
         }
 
-        incrementExportCount(reimbursement);
+        markExported(reimbursement);
         return reimbursement.getZipUrl();
     }
 
     @Transactional(rollbackFor = Exception.class)
     public void sendEmail(Long userId, Long id, EmailSendDTO dto) {
-        Reimbursement reimbursement = getByIdAndUser(id, userId);
         User user = userMapper.selectById(userId);
+
+        if (user.getMemberStatus() == null || user.getMemberStatus() == 0) {
+            throw new BizException(ResultCode.MEMBER_REQUIRED.getCode(), "邮件发送为会员专属功能，请升级会员");
+        }
+        if (user.getMemberType() != null && user.getMemberType() == 1) {
+            String key = "email:count:" + userId + ":" + YearMonth.now();
+            Long count = redisTemplate.opsForValue().increment(key);
+            if (count != null && count > 5) {
+                redisTemplate.opsForValue().decrement(key);
+                throw new BizException(400, "月度会员每月最多发送5次邮件");
+            }
+            if (count != null && count == 1) {
+                redisTemplate.expire(key, 32, TimeUnit.DAYS);
+            }
+        }
+
+        Reimbursement reimbursement = getByIdAndUser(id, userId);
 
         if (dto.getAttachType() != null && dto.getAttachType() == 2) {
             if (reimbursement.getZipUrl() == null || reimbursement.getZipUrl().isBlank()) {
                 List<Expense> expenses = getRelatedExpenses(reimbursement.getId());
-                String zipUrl = zipPackageService.generateZip(reimbursement, expenses);
+                String mergedPdfUrl = reimbursement.getMergedPdfUrl();
+                String zipUrl = zipPackageService.generateZip(reimbursement, expenses, mergedPdfUrl);
                 reimbursement.setZipUrl(zipUrl);
             }
         } else {
@@ -336,13 +395,49 @@ public class ReimbursementService {
         return reimbursement;
     }
 
-    private void incrementExportCount(Reimbursement reimbursement) {
-        LambdaUpdateWrapper<Reimbursement> wrapper = new LambdaUpdateWrapper<>();
-        wrapper.eq(Reimbursement::getId, reimbursement.getId())
-                .set(Reimbursement::getExportCount,
-                        (reimbursement.getExportCount() != null ? reimbursement.getExportCount() : 0) + 1)
-                .set(Reimbursement::getExportedAt, LocalDateTime.now());
-        reimbursementMapper.update(null, wrapper);
+    private void markExported(Reimbursement reimbursement) {
+        if (reimbursement.getReimburseStatus() != null && reimbursement.getReimburseStatus() == 0) {
+            reimbursement.setReimburseStatus(1);
+        }
+        if (reimbursement.getExportedAt() == null) {
+            reimbursement.setExportedAt(LocalDateTime.now());
+        }
+        reimbursement.setExportCount(
+                (reimbursement.getExportCount() == null ? 0 : reimbursement.getExportCount()) + 1);
+        reimbursement.setUpdatedAt(LocalDateTime.now());
+        reimbursementMapper.updateById(reimbursement);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void cancelReimbursement(Long userId, Long id) {
+        Reimbursement reimbursement = getByIdAndUser(id, userId);
+        if (reimbursement.getReimburseStatus() != null && reimbursement.getReimburseStatus() == 2) {
+            throw new BizException(400, "已收款的报销单不能取消");
+        }
+
+        List<Expense> expenses = expenseMapper.selectList(
+                new LambdaQueryWrapper<Expense>()
+                        .eq(Expense::getReimbursementId, id)
+                        .eq(Expense::getStatus, 0)
+        );
+        for (Expense expense : expenses) {
+            expense.setReimburseStatus(0);
+            expense.setReimbursementId(null);
+            expense.setUpdatedAt(LocalDateTime.now());
+            expense.setDataSign(dataSignService.sign(expenseService.buildSignPayload(expense)));
+            expenseMapper.updateById(expense);
+        }
+
+        reimbursement.setStatus(1);
+        reimbursement.setUpdatedAt(LocalDateTime.now());
+        reimbursementMapper.updateById(reimbursement);
+    }
+
+    private Map<Long, String> buildCategoryMap() {
+        return expenseCategoryMapper.selectList(null)
+                .stream()
+                .collect(Collectors.toMap(ExpenseCategory::getId, ExpenseCategory::getName,
+                        (a, b) -> a));
     }
 
     private ReimbursementVO toVO(Reimbursement r, List<Expense> expenses) {

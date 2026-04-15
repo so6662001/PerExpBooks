@@ -36,6 +36,7 @@ export interface ReimbursementVO {
 
 export interface ReimbursementQueryDTO extends PageQuery {
   reimburseStatus?: number
+  status?: number
 }
 
 export type ReimbursementStatus = 'generated' | 'exported' | 'received'
@@ -43,4 +44,5 @@ export type ReimbursementStatus = 'generated' | 'exported' | 'received'
 export interface ExportOptions {
   type: 'merged_pdf' | 'zip' | 'report_only' | 'email'
   email?: string
+  attachType?: number
 }

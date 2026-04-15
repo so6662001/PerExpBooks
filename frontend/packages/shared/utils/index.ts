@@ -51,7 +51,15 @@ export function getCategoryIcon(category: string): string {
   return map[category] || '📋'
 }
 
-export function getStatusLabel(status: string): string {
+export function getStatusLabel(status: string | number): string {
+  const numMap: Record<number, string> = {
+    0: '已生成',
+    1: '已导出',
+    2: '已收款',
+  }
+  if (typeof status === 'number') {
+    return numMap[status] || String(status)
+  }
   const map: Record<string, string> = {
     pending: '待报销',
     reimbursing: '报销中',
@@ -67,7 +75,11 @@ export function getStatusLabel(status: string): string {
   return map[status] || status
 }
 
-export function getStatusColor(status: string): string {
+export function getStatusColor(status: string | number): string {
+  if (typeof status === 'number') {
+    const numMap: Record<number, string> = { 0: '#007AFF', 1: '#FF9500', 2: '#34C759' }
+    return numMap[status] || '#999999'
+  }
   const map: Record<string, string> = {
     pending: '#FF9500',
     reimbursing: '#007AFF',

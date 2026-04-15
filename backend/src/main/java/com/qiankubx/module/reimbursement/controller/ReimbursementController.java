@@ -29,9 +29,10 @@ public class ReimbursementController {
     }
 
     @GetMapping("/list")
-    public Result<List<ReimbursementVO>> list(HttpServletRequest request) {
+    public Result<List<ReimbursementVO>> list(HttpServletRequest request,
+                                              @RequestParam(required = false) Integer reimburseStatus) {
         Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
-        return Result.ok(reimbursementService.list(userId));
+        return Result.ok(reimbursementService.list(userId, reimburseStatus));
     }
 
     @GetMapping("/{id}")
@@ -96,5 +97,13 @@ public class ReimbursementController {
                                               @PathVariable Long id) {
         Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
         return Result.ok(reimbursementService.regenerate(userId, id));
+    }
+
+    @DeleteMapping("/{id}")
+    public Result<Void> cancel(HttpServletRequest request,
+                               @PathVariable Long id) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        reimbursementService.cancelReimbursement(userId, id);
+        return Result.ok();
     }
 }

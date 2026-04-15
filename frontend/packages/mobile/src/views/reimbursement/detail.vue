@@ -6,6 +6,7 @@ import {
   getReimbursementDetail,
   exportReimbursement,
   markReceived,
+  cancelReimbursement,
   formatAmount,
   formatDate,
 } from '@qianku/shared'
@@ -18,6 +19,7 @@ const loading = ref(true)
 const exporting = ref(false)
 const showEmailDialog = ref(false)
 const emailInput = ref('')
+const emailAttachType = ref(1)
 
 onMounted(async () => {
   const id = route.params.id as string
@@ -43,6 +45,7 @@ async function handleExport(type: ExportOptions['type']) {
       window.open(result.url, '_blank')
     }
     showToast({ message: '导出成功', type: 'success' })
+    detail.value = await getReimbursementDetail(detail.value.id)
   } catch (e: any) {
     showToast(e.message || '导出失败')
   } finally {
@@ -54,7 +57,11 @@ async function handleSendEmail() {
   if (!detail.value || !emailInput.value) return
   exporting.value = true
   try {
-    await exportReimbursement(detail.value.id, { type: 'email', email: emailInput.value })
+    await exportReimbursement(detail.value.id, {
+      type: 'email',
+      email: emailInput.value,
+      attachType: emailAttachType.value,
+    })
     showToast({ message: '已发送至邮箱', type: 'success' })
     showEmailDialog.value = false
   } catch (e: any) {
@@ -75,6 +82,22 @@ async function handleMarkReceived() {
     await markReceived(detail.value.id)
     detail.value.reimburseStatus = 2
     showToast({ message: '已标记收款', type: 'success' })
+  } catch {
+    // cancelled
+  }
+}
+
+async function handleCancel() {
+  if (!detail.value) return
+  try {
+    await showDialog({
+      title: '取消报销单',
+      message: '确认取消此报销单？关联的费用将恢复为待报销状态。',
+      showCancelButton: true,
+    })
+    await cancelReimbursement(detail.value.id)
+    showToast({ message: '已取消报销单', type: 'success' })
+    router.back()
   } catch {
     // cancelled
   }
@@ -144,9 +167,26 @@ async function handleMarkReceived() {
         </div>
       </div>
 
-      <div v-if="detail.reimburseStatus !== 2" class="action-bar">
-        <van-button type="primary" block round @click="handleMarkReceived">
+      <div class="action-bar">
+        <van-button
+          v-if="detail.reimburseStatus !== 2"
+          type="primary"
+          block
+          round
+          @click="handleMarkReceived"
+          style="margin-bottom: 10px"
+        >
           确认收款
+        </van-button>
+        <van-button
+          v-if="detail.reimburseStatus !== 2"
+          type="danger"
+          block
+          round
+          plain
+          @click="handleCancel"
+        >
+          取消报销单
         </van-button>
       </div>
     </template>
@@ -165,6 +205,13 @@ async function handleMarkReceived() {
           placeholder="请输入接收邮箱"
           type="text"
         />
+        <div style="padding: 12px 16px 0">
+          <div style="font-size: 14px; color: #646566; margin-bottom: 8px">附件类型</div>
+          <van-radio-group v-model="emailAttachType" direction="horizontal">
+            <van-radio :name="1">合并PDF (推荐)</van-radio>
+            <van-radio :name="2">ZIP压缩包</van-radio>
+          </van-radio-group>
+        </div>
       </div>
     </van-dialog>
   </div>

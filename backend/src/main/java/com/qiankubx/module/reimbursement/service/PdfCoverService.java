@@ -8,7 +8,10 @@ import com.itextpdf.kernel.font.PdfFont;
 import com.itextpdf.kernel.font.PdfFontFactory;
 import com.itextpdf.kernel.geom.PageSize;
 import com.itextpdf.kernel.pdf.PdfDocument;
+import com.itextpdf.kernel.pdf.PdfPage;
 import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.kernel.pdf.canvas.PdfCanvas;
+import com.itextpdf.kernel.pdf.extgstate.PdfExtGState;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.borders.Border;
 import com.itextpdf.layout.borders.SolidBorder;
@@ -30,7 +33,9 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -43,9 +48,10 @@ public class PdfCoverService {
     private static final DeviceRgb HEADER_BG = new DeviceRgb(66, 133, 244);
     private static final DeviceRgb LIGHT_GRAY_BG = new DeviceRgb(245, 245, 245);
 
-    public String generateCoverPdf(Reimbursement reimbursement, User user, List<Expense> expenses) {
+    public String generateCoverPdf(Reimbursement reimbursement, User user, List<Expense> expenses,
+                                   Map<Long, String> categoryMap) {
         try {
-            byte[] pdfBytes = buildPdf(reimbursement, user, expenses);
+            byte[] pdfBytes = buildPdf(reimbursement, user, expenses, categoryMap != null ? categoryMap : Collections.emptyMap());
             String objectKey = ossConfig.getDirs().getReimbursement()
                     + reimbursement.getReimburseNo() + "_cover.pdf";
 
@@ -61,7 +67,12 @@ public class PdfCoverService {
         }
     }
 
-    private byte[] buildPdf(Reimbursement reimbursement, User user, List<Expense> expenses) throws Exception {
+    public String generateCoverPdf(Reimbursement reimbursement, User user, List<Expense> expenses) {
+        return generateCoverPdf(reimbursement, user, expenses, Collections.emptyMap());
+    }
+
+    private byte[] buildPdf(Reimbursement reimbursement, User user, List<Expense> expenses,
+                            Map<Long, String> categoryMap) throws Exception {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfWriter writer = new PdfWriter(baos);
         PdfDocument pdfDoc = new PdfDocument(writer);
@@ -72,10 +83,20 @@ public class PdfCoverService {
 
         addTitle(document, font);
         addReimbursementInfo(document, font, reimbursement, user);
-        addExpenseTable(document, font, expenses);
+        addExpenseTable(document, font, expenses, categoryMap);
         addTotalAmount(document, font, reimbursement);
         addAttachmentList(document, font, expenses);
+
+        if (reimbursement.getRemark() != null && !reimbursement.getRemark().isEmpty()) {
+            document.add(new Paragraph("备注：" + reimbursement.getRemark())
+                    .setFont(font).setFontSize(10).setMarginTop(15));
+        }
+
         addSignatureArea(document, font);
+
+        if (user.getMemberStatus() == null || user.getMemberStatus() == 0) {
+            addWatermark(pdfDoc, font);
+        }
 
         document.close();
         return baos.toByteArray();
@@ -146,7 +167,8 @@ public class PdfCoverService {
                 .setPadding(5));
     }
 
-    private void addExpenseTable(Document document, PdfFont font, List<Expense> expenses) {
+    private void addExpenseTable(Document document, PdfFont font, List<Expense> expenses,
+                                Map<Long, String> categoryMap) {
         Paragraph subtitle = new Paragraph("费用明细")
                 .setFont(font)
                 .setFontSize(14)
@@ -159,7 +181,7 @@ public class PdfCoverService {
                 .useAllAvailableWidth()
                 .setHorizontalAlignment(HorizontalAlignment.CENTER);
 
-        String[] headers = {"序号", "类别", "发票号码", "金额(元)", "备注"};
+        String[] headers = {"序号", "费用类别", "发票号码", "金额(元)", "备注"};
         for (String header : headers) {
             table.addHeaderCell(new Cell()
                     .add(new Paragraph(header).setFont(font).setFontSize(9).simulateBold())
@@ -174,10 +196,10 @@ public class PdfCoverService {
             Expense expense = expenses.get(i);
             DeviceRgb rowBg = (i % 2 == 0) ? new DeviceRgb(255, 255, 255) : LIGHT_GRAY_BG;
 
+            String categoryName = resolveCategoryName(expense, categoryMap);
+
             table.addCell(createCell(String.valueOf(i + 1), font, rowBg, TextAlignment.CENTER));
-            table.addCell(createCell(
-                    expense.getInvoiceType() != null ? expense.getInvoiceType() : "-",
-                    font, rowBg, TextAlignment.LEFT));
+            table.addCell(createCell(categoryName, font, rowBg, TextAlignment.LEFT));
             table.addCell(createCell(
                     expense.getInvoiceNo() != null ? expense.getInvoiceNo() : "-",
                     font, rowBg, TextAlignment.LEFT));
@@ -190,6 +212,16 @@ public class PdfCoverService {
         }
 
         document.add(table);
+    }
+
+    private String resolveCategoryName(Expense expense, Map<Long, String> categoryMap) {
+        if (expense.getCategoryId() != null && categoryMap.containsKey(expense.getCategoryId())) {
+            return categoryMap.get(expense.getCategoryId());
+        }
+        if (expense.getInvoiceType() != null && !expense.getInvoiceType().isBlank()) {
+            return expense.getInvoiceType();
+        }
+        return "其他";
     }
 
     private Cell createCell(String text, PdfFont font, DeviceRgb bgColor, TextAlignment alignment) {
@@ -282,6 +314,31 @@ public class PdfCoverService {
                 .setFontColor(ColorConstants.GRAY)
                 .setTextAlignment(TextAlignment.RIGHT)
                 .setMarginTop(20));
+    }
+
+    private void addWatermark(PdfDocument pdfDoc, PdfFont font) {
+        PdfExtGState gs = new PdfExtGState().setFillOpacity(0.15f);
+        DeviceRgb color = new DeviceRgb(180, 180, 180);
+        for (int i = 1; i <= pdfDoc.getNumberOfPages(); i++) {
+            PdfPage page = pdfDoc.getPage(i);
+            PdfCanvas canvas = new PdfCanvas(page);
+            canvas.saveState();
+            canvas.setExtGState(gs);
+            canvas.setFillColor(color);
+            canvas.beginText();
+            canvas.setFontAndSize(font, 40);
+            float pageWidth = page.getPageSize().getWidth();
+            float pageHeight = page.getPageSize().getHeight();
+            float x = pageWidth / 2 - 80;
+            float y = pageHeight / 2;
+            canvas.setTextMatrix(
+                    (float) Math.cos(Math.toRadians(45)), (float) Math.sin(Math.toRadians(45)),
+                    (float) -Math.sin(Math.toRadians(45)), (float) Math.cos(Math.toRadians(45)),
+                    x, y);
+            canvas.showText("\u94B1\u9177\u62A5\u9500");
+            canvas.endText();
+            canvas.restoreState();
+        }
     }
 
     private String buildOssUrl(String objectKey) {

@@ -29,7 +29,7 @@ public class ZipPackageService {
     private final OssConfig ossConfig;
     private final PdfMergeService pdfMergeService;
 
-    public String generateZip(Reimbursement reimbursement, List<Expense> expenses) {
+    public String generateZip(Reimbursement reimbursement, List<Expense> expenses, String mergedPdfUrl) {
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             ZipOutputStream zos = new ZipOutputStream(baos);
@@ -37,6 +37,7 @@ public class ZipPackageService {
             addCoverPdf(zos, reimbursement);
             addExpenseFiles(zos, expenses);
             addExcelManifest(zos, expenses, reimbursement);
+            addMergedPdf(zos, mergedPdfUrl);
 
             zos.close();
 
@@ -51,6 +52,23 @@ public class ZipPackageService {
         } catch (Exception e) {
             log.error("生成ZIP失败", e);
             throw new RuntimeException("生成ZIP失败: " + e.getMessage(), e);
+        }
+    }
+
+    public String generateZip(Reimbursement reimbursement, List<Expense> expenses) {
+        return generateZip(reimbursement, expenses, null);
+    }
+
+    private void addMergedPdf(ZipOutputStream zos, String mergedPdfUrl) throws Exception {
+        if (mergedPdfUrl == null || mergedPdfUrl.isBlank()) {
+            return;
+        }
+        String key = pdfMergeService.extractOssKey(mergedPdfUrl);
+        byte[] data = downloadBytes(key);
+        if (data != null) {
+            zos.putNextEntry(new ZipEntry("合并版_全部文件.pdf"));
+            zos.write(data);
+            zos.closeEntry();
         }
     }
 
