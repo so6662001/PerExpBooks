@@ -9,6 +9,7 @@ import {
   cancelReimbursement,
   formatAmount,
   formatDate,
+  get,
 } from '@qianku/shared'
 import type { ReimbursementVO, ExportOptions } from '@qianku/shared'
 
@@ -20,6 +21,8 @@ const exporting = ref(false)
 const showEmailDialog = ref(false)
 const emailInput = ref('')
 const emailAttachType = ref(1)
+const showShareGuide = ref(false)
+const shareGuideMessage = ref('')
 
 onMounted(async () => {
   const id = route.params.id as string
@@ -82,6 +85,13 @@ async function handleMarkReceived() {
     await markReceived(detail.value.id)
     detail.value.reimburseStatus = 2
     showToast({ message: '已标记收款', type: 'success' })
+    try {
+      const triggerResult = await get('/trigger/check', { params: { scene: 'REIMBURSEMENT_RECEIVED' } })
+      if (triggerResult?.show) {
+        showShareGuide.value = true
+        shareGuideMessage.value = triggerResult.message
+      }
+    } catch { /* ignore */ }
   } catch {
     // cancelled
   }
@@ -190,6 +200,16 @@ async function handleCancel() {
         </van-button>
       </div>
     </template>
+
+    <van-popup v-model:show="showShareGuide" position="center" round style="padding: 24px; width: 80%">
+      <div style="text-align: center">
+        <div style="font-size: 16px; font-weight: 600; margin-bottom: 12px">分享给好友</div>
+        <div style="font-size: 14px; color: #666">{{ shareGuideMessage }}</div>
+        <van-button type="primary" round block style="margin-top: 16px" @click="showShareGuide = false">
+          知道了
+        </van-button>
+      </div>
+    </van-popup>
 
     <van-dialog
       v-model:show="showEmailDialog"

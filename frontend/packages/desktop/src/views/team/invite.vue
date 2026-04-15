@@ -93,7 +93,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import {
   inviteTeamMember,
-  getPromotionInfo,
+  getInviteCode,
   getInviteRecords,
   formatDate,
   formatPhone,
@@ -149,8 +149,8 @@ async function loadRecords() {
 
 onMounted(async () => {
   try {
-    const info = await getPromotionInfo()
-    inviteLink.value = info.inviteLink
+    const codeInfo = await getInviteCode()
+    inviteLink.value = codeInfo.inviteLink
   } catch {
     // silent
   }

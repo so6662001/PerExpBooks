@@ -1,5 +1,6 @@
 package com.qiankubx.module.promotion.service;
 
+import com.qiankubx.common.exception.BizException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -64,6 +65,20 @@ public class AntiCheatService {
         }
 
         return result;
+    }
+
+    public void assertInviteNotBlocked(Long inviterId, String inviteeIp, String deviceFingerprint) {
+        Map<String, Object> result = checkInviteCheat(inviterId, inviteeIp, deviceFingerprint);
+        if (Boolean.TRUE.equals(result.get("blocked"))) {
+            throw new BizException(400, "邀请风控拦截: " + result.get("reason"));
+        }
+    }
+
+    public void assertWithdrawalNotFlagged(Long userId) {
+        Map<String, Object> result = checkWithdrawalCheat(userId);
+        if (Boolean.TRUE.equals(result.get("flagged"))) {
+            throw new BizException(400, "提现风控拦截: " + result.get("reason"));
+        }
     }
 
     public Map<String, Object> checkWithdrawalCheat(Long userId) {

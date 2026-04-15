@@ -30,8 +30,8 @@ public class PromoterLevelService {
             level.setUserId(userId);
             level.setLevel(1);
             level.setLevelName("新手推广员");
-            level.setLevel1Rate(new BigDecimal("0.20"));
-            level.setLevel2Rate(new BigDecimal("0.05"));
+            level.setLevel1Rate(new BigDecimal("19"));
+            level.setLevel2Rate(new BigDecimal("5"));
             level.setInviteCount(0);
             level.setPaidInviteCount(0);
             level.setTotalCommission(BigDecimal.ZERO);
@@ -81,23 +81,23 @@ public class PromoterLevelService {
         if (inviteCount >= 30) {
             newLevel = 4;
             newLevelName = "钻石推广员";
-            newLevel1Rate = new BigDecimal("0.35");
-            newLevel2Rate = new BigDecimal("0.10");
+            newLevel1Rate = new BigDecimal("25");
+            newLevel2Rate = new BigDecimal("10");
         } else if (inviteCount >= 10) {
             newLevel = 3;
             newLevelName = "金牌推广员";
-            newLevel1Rate = new BigDecimal("0.30");
-            newLevel2Rate = new BigDecimal("0.08");
+            newLevel1Rate = new BigDecimal("22");
+            newLevel2Rate = new BigDecimal("8");
         } else if (inviteCount >= 3) {
             newLevel = 2;
             newLevelName = "银牌推广员";
-            newLevel1Rate = new BigDecimal("0.25");
-            newLevel2Rate = new BigDecimal("0.06");
+            newLevel1Rate = new BigDecimal("19");
+            newLevel2Rate = new BigDecimal("5");
         } else {
             newLevel = 1;
             newLevelName = "新手推广员";
-            newLevel1Rate = new BigDecimal("0.20");
-            newLevel2Rate = new BigDecimal("0.05");
+            newLevel1Rate = new BigDecimal("19");
+            newLevel2Rate = new BigDecimal("5");
         }
 
         if (newLevel > level.getLevel()) {

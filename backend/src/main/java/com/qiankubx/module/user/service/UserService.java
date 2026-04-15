@@ -12,6 +12,7 @@ import com.qiankubx.module.agreement.mapper.AgreementVersionMapper;
 import com.qiankubx.module.agreement.mapper.UserAgreementSignMapper;
 import com.qiankubx.module.agreement.service.AgreementService;
 import com.qiankubx.module.coupon.service.CouponService;
+import com.qiankubx.module.promotion.service.AntiCheatService;
 import com.qiankubx.module.promotion.service.InviteService;
 import com.qiankubx.module.promotion.service.PointsService;
 import com.qiankubx.module.promotion.service.PromoterLevelService;
@@ -53,6 +54,7 @@ public class UserService {
     private final CouponService couponService;
     private final InviteService inviteService;
     private final PointsService pointsService;
+    private final AntiCheatService antiCheatService;
 
     public UserService(
             UserMapper userMapper,
@@ -64,7 +66,8 @@ public class UserService {
             @Lazy PromoterLevelService promoterLevelService,
             @Lazy CouponService couponService,
             @Lazy InviteService inviteService,
-            @Lazy PointsService pointsService
+            @Lazy PointsService pointsService,
+            @Lazy AntiCheatService antiCheatService
     ) {
         this.userMapper = userMapper;
         this.jwtUtil = jwtUtil;
@@ -76,10 +79,11 @@ public class UserService {
         this.couponService = couponService;
         this.inviteService = inviteService;
         this.pointsService = pointsService;
+        this.antiCheatService = antiCheatService;
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public LoginVO smsLogin(SmsLoginDTO dto) {
+    public LoginVO smsLogin(SmsLoginDTO dto, String clientIp, String userAgent) {
         String cacheKey = SMS_CODE_PREFIX + dto.getPhone();
         String cachedCode = stringRedisTemplate.opsForValue().get(cacheKey);
         if (cachedCode == null || !cachedCode.equals(dto.getCode())) {
@@ -93,7 +97,7 @@ public class UserService {
 
         boolean isNew = false;
         if (user == null) {
-            user = registerByPhone(dto.getPhone(), dto.getInviteCode());
+            user = registerByPhone(dto.getPhone(), dto.getInviteCode(), clientIp, userAgent);
             isNew = true;
         }
 
@@ -109,7 +113,7 @@ public class UserService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public LoginVO wxLogin(WxLoginDTO dto) {
+    public LoginVO wxLogin(WxLoginDTO dto, String clientIp, String userAgent) {
         String openid = "wx_" + dto.getCode();
 
         User user = userMapper.selectOne(
@@ -118,7 +122,7 @@ public class UserService {
 
         boolean isNew = false;
         if (user == null) {
-            user = registerByWx(openid, dto.getInviteCode());
+            user = registerByWx(openid, dto.getInviteCode(), clientIp, userAgent);
             isNew = true;
         }
 
@@ -238,7 +242,7 @@ public class UserService {
         return user;
     }
 
-    private User registerByPhone(String phone, String inviteCode) {
+    private User registerByPhone(String phone, String inviteCode, String clientIp, String userAgent) {
         User user = new User();
         user.setPhone(phone);
         user.setMemberType(0);
@@ -255,11 +259,11 @@ public class UserService {
 
         userMapper.insert(user);
 
-        afterRegister(user, inviteCode);
+        afterRegister(user, inviteCode, clientIp, userAgent);
         return user;
     }
 
-    private User registerByWx(String openid, String inviteCode) {
+    private User registerByWx(String openid, String inviteCode, String clientIp, String userAgent) {
         User user = new User();
         user.setOpenid(openid);
         user.setMemberType(0);
@@ -276,11 +280,11 @@ public class UserService {
 
         userMapper.insert(user);
 
-        afterRegister(user, inviteCode);
+        afterRegister(user, inviteCode, clientIp, userAgent);
         return user;
     }
 
-    private void afterRegister(User user, String inviteCode) {
+    private void afterRegister(User user, String inviteCode, String clientIp, String userAgent) {
         Long userId = user.getId();
 
         signCurrentAgreements(user);
@@ -290,6 +294,19 @@ public class UserService {
         couponService.issueNewUserCoupon(userId);
 
         if (inviteCode != null && !inviteCode.isBlank()) {
+            User inviter = userMapper.selectOne(
+                    new LambdaQueryWrapper<User>().eq(User::getInviteCode, inviteCode)
+            );
+            if (inviter != null) {
+                try {
+                    antiCheatService.assertInviteNotBlocked(inviter.getId(), clientIp, userAgent);
+                } catch (Exception e) {
+                    log.warn("邀请风控拦截，跳过绑定: userId={}, inviteCode={}, reason={}",
+                            userId, inviteCode, e.getMessage());
+                    return;
+                }
+            }
+
             inviteService.bindInviteRelation(userId, inviteCode);
 
             User freshUser = userMapper.selectById(userId);

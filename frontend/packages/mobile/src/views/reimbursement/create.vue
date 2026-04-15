@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { getPendingExpenses, createReimbursement, formatAmount, formatDate } from '@qianku/shared'
+import { getPendingExpenses, createReimbursement, formatAmount, formatDate, get } from '@qianku/shared'
 import type { ExpenseVO } from '@qianku/shared'
 
 const router = useRouter()
@@ -12,6 +12,8 @@ const title = ref('')
 const remark = ref('')
 const loading = ref(true)
 const creating = ref(false)
+const showShareGuide = ref(false)
+const shareGuideMessage = ref('')
 
 const totalAmount = computed(() =>
   pendingExpenses.value
@@ -69,6 +71,14 @@ async function handleCreate() {
       expenseIds: selectedIds.value,
     })
     showToast({ message: '报销单创建成功', type: 'success' })
+    try {
+      const triggerResult = await get('/trigger/check', { params: { scene: 'REIMBURSEMENT_CREATED' } })
+      if (triggerResult?.show) {
+        showShareGuide.value = true
+        shareGuideMessage.value = triggerResult.message
+        return
+      }
+    } catch { /* ignore */ }
     router.back()
   } catch (e: any) {
     showToast(e.message || '创建失败')
@@ -150,6 +160,16 @@ async function handleCreate() {
         生成报销单
       </van-button>
     </div>
+
+    <van-popup v-model:show="showShareGuide" position="center" round style="padding: 24px; width: 80%">
+      <div style="text-align: center">
+        <div style="font-size: 16px; font-weight: 600; margin-bottom: 12px">分享给好友</div>
+        <div style="font-size: 14px; color: #666">{{ shareGuideMessage }}</div>
+        <van-button type="primary" round block style="margin-top: 16px" @click="showShareGuide = false; router.back()">
+          知道了
+        </van-button>
+      </div>
+    </van-popup>
   </div>
 </template>
 

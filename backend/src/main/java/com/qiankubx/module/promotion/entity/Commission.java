@@ -24,6 +24,9 @@ public class Commission {
     /** 1一级返佣 2二级返佣 */
     private Integer level;
 
+    /** 1一级首购 2一级续费 3二级首购 4二级续费 */
+    private Integer commissionType;
+
     private BigDecimal orderAmount;
 
     private BigDecimal commissionRate;

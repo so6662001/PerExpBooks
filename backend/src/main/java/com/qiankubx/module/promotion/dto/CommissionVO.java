@@ -16,6 +16,8 @@ public class CommissionVO {
 
     private Integer level;
 
+    private Integer commissionType;
+
     private BigDecimal orderAmount;
 
     private BigDecimal commissionRate;

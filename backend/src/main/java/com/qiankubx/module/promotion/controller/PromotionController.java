@@ -96,6 +96,13 @@ public class PromotionController {
         return Result.ok(posterService.generateSocialCard(userId, dto.getCardType()));
     }
 
+    @PostMapping("/daily-share")
+    public Result<Void> recordDailyShare(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        pointsService.recordDailyShare(userId);
+        return Result.ok();
+    }
+
     @Data
     public static class PosterCustomDTO {
         private String cardType;

@@ -2,27 +2,37 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { getPromotionInfo, getInviteRecords, formatAmount, copyToClipboard, formatDate } from '@qianku/shared'
-import type { PromotionInfoVO, InviteRecordVO } from '@qianku/shared'
+import {
+  getPromotionDashboard,
+  getInviteCode,
+  getInviteRecords,
+  recordDailyShare,
+  getPoster,
+  generateCustomCard,
+  formatAmount,
+  formatDate,
+  copyToClipboard,
+} from '@qianku/shared'
+import type { DashboardVO, InviteCodeVO, InviteRecordVO } from '@qianku/shared'
 
 const router = useRouter()
-const info = ref<PromotionInfoVO | null>(null)
+const dashboard = ref<DashboardVO | null>(null)
+const codeInfo = ref<InviteCodeVO | null>(null)
 const records = ref<InviteRecordVO[]>([])
 const loading = ref(true)
-const loadingRecords = ref(false)
-const finished = ref(false)
-const pageNum = ref(1)
+const showShareGuide = ref(false)
+const shareGuideMessage = ref('')
 
 onMounted(async () => {
   try {
-    const [infoData, recordData] = await Promise.all([
-      getPromotionInfo(),
-      getInviteRecords({ pageNum: 1, pageSize: 20 }),
+    const [dashboardData, codeData, recordData] = await Promise.all([
+      getPromotionDashboard(),
+      getInviteCode(),
+      getInviteRecords(),
     ])
-    info.value = infoData
-    records.value = recordData.list
-    if (records.value.length >= recordData.total) finished.value = true
-    pageNum.value = 2
+    dashboard.value = dashboardData
+    codeInfo.value = codeData
+    records.value = recordData
   } catch (e) {
     console.error(e)
   } finally {
@@ -30,37 +40,47 @@ onMounted(async () => {
   }
 })
 
-async function loadMoreRecords() {
-  loadingRecords.value = true
-  try {
-    const result = await getInviteRecords({ pageNum: pageNum.value, pageSize: 20 })
-    records.value.push(...result.list)
-    if (records.value.length >= result.total) finished.value = true
-    pageNum.value++
-  } catch {
-    finished.value = true
-  } finally {
-    loadingRecords.value = false
-  }
+const levelName = (level: number) => {
+  const names: Record<number, string> = { 1: '新手', 2: '银牌', 3: '金牌', 4: '钻石' }
+  return names[level] || '新手'
 }
 
-async function copyCode() {
-  if (!info.value) return
+async function copyInviteLink() {
+  if (!codeInfo.value) return
   try {
-    await copyToClipboard(info.value.inviteCode)
-    showToast({ message: '邀请码已复制', type: 'success' })
-  } catch {
-    showToast('复制失败')
-  }
-}
-
-async function copyLink() {
-  if (!info.value) return
-  try {
-    await copyToClipboard(info.value.inviteLink)
+    await copyToClipboard(codeInfo.value.inviteLink)
     showToast({ message: '邀请链接已复制', type: 'success' })
   } catch {
     showToast('复制失败')
+  }
+}
+
+async function generatePoster() {
+  try {
+    const result = await getPoster({ type: 'invite' })
+    showToast({ message: '海报已生成', type: 'success' })
+  } catch (e: any) {
+    showToast(e.message || '生成失败')
+  }
+}
+
+async function recordDailyShareAndTrack() {
+  try {
+    await recordDailyShare()
+    showToast({ message: '分享成功 +2积分', type: 'success' })
+    const data = await getPromotionDashboard()
+    dashboard.value = data
+  } catch (e: any) {
+    showToast(e.message || '分享失败')
+  }
+}
+
+async function generateCard(cardType: string) {
+  try {
+    await generateCustomCard({ cardType })
+    showToast({ message: '卡片已生成', type: 'success' })
+  } catch (e: any) {
+    showToast(e.message || '生成失败')
   }
 }
 </script>
@@ -71,98 +91,107 @@ async function copyLink() {
 
     <van-loading v-if="loading" class="page-loading" />
 
-    <template v-if="info">
-      <div class="promo-header">
-        <div class="promo-level">
-          <span class="level-badge">{{ info.level }}</span>
-          <span class="commission-rate">佣金比例 {{ (info.commissionRate * 100).toFixed(0) }}%</span>
+    <template v-if="dashboard">
+      <div class="level-card">
+        <div class="level-title">
+          {{ dashboard.levelInfo.levelName }} Lv.{{ dashboard.levelInfo.level }}
         </div>
-      </div>
-
-      <div class="earnings-grid">
-        <div class="earning-card card">
-          <div class="earning-value">{{ formatAmount(info.totalEarnings) }}</div>
-          <div class="earning-label">累计收益</div>
-        </div>
-        <div class="earning-card card">
-          <div class="earning-value">{{ formatAmount(info.monthlyEarnings) }}</div>
-          <div class="earning-label">本月收益</div>
-        </div>
-        <div class="earning-card card">
-          <div class="earning-value">{{ info.inviteCount }}</div>
-          <div class="earning-label">邀请人数</div>
-        </div>
-        <div class="earning-card card">
-          <div class="earning-value">{{ info.pointsBalance }}</div>
-          <div class="earning-label">积分余额</div>
-        </div>
-      </div>
-
-      <div class="invite-section card">
-        <h3 class="invite-title">邀请好友</h3>
-        <div class="invite-item">
-          <span class="invite-label">邀请码</span>
-          <div class="invite-value">
-            <span class="code-text">{{ info.inviteCode }}</span>
-            <van-button type="primary" size="mini" round @click="copyCode">
-              复制
-            </van-button>
-          </div>
-        </div>
-        <div class="invite-item">
-          <span class="invite-label">邀请链接</span>
-          <div class="invite-value">
-            <span class="link-text">{{ info.inviteLink }}</span>
-            <van-button type="primary" size="mini" round @click="copyLink">
-              复制
-            </van-button>
+        <div class="level-progress" v-if="dashboard.levelInfo.nextLevelInviteRequired">
+          <van-progress
+            :percentage="Math.min(100, Math.round(dashboard.levelInfo.paidInviteCount / dashboard.levelInfo.nextLevelInviteRequired * 100))"
+            stroke-width="8"
+            color="#FFD700"
+          />
+          <div class="progress-text">
+            {{ dashboard.levelInfo.paidInviteCount }}/{{ dashboard.levelInfo.nextLevelInviteRequired }} 人 → {{ dashboard.levelInfo.nextLevelName }}
           </div>
         </div>
       </div>
 
-      <div class="records-section">
-        <div class="section-title">邀请记录</div>
-        <van-list
-          v-model:loading="loadingRecords"
-          :finished="finished"
-          finished-text="没有更多了"
-          @load="loadMoreRecords"
+      <div class="data-grid">
+        <div class="data-item card">
+          <div class="data-value">¥{{ formatAmount(dashboard.totalCommission) }}</div>
+          <div class="data-label">累计收益</div>
+        </div>
+        <div class="data-item card">
+          <div class="data-value">¥{{ formatAmount(dashboard.availableBalance) }}</div>
+          <div class="data-label">可提现</div>
+        </div>
+        <div class="data-item card">
+          <div class="data-value">{{ dashboard.points }}</div>
+          <div class="data-label">积分</div>
+        </div>
+        <div class="data-item card">
+          <div class="data-value">{{ dashboard.totalInvite }}人</div>
+          <div class="data-label">已邀请</div>
+        </div>
+      </div>
+
+      <div class="actions card">
+        <van-button type="primary" round block @click="copyInviteLink">复制邀请链接</van-button>
+        <van-button round block @click="generatePoster" style="margin-top: 8px">生成海报</van-button>
+        <van-button round block @click="recordDailyShareAndTrack" style="margin-top: 8px" color="#FF9500">
+          每日分享+2积分
+        </van-button>
+      </div>
+
+      <div class="social-cards">
+        <div class="section-title">社交货币卡片</div>
+        <div class="cards-grid">
+          <div class="social-card card" @click="generateCard('achievement')">
+            <div class="card-icon">🏆</div>
+            <div class="card-name">出差战绩卡</div>
+          </div>
+          <div class="social-card card" @click="generateCard('savings')">
+            <div class="card-icon">📊</div>
+            <div class="card-name">效率对比卡</div>
+          </div>
+          <div class="social-card card" @click="generateCard('monthly_report')">
+            <div class="card-icon">📅</div>
+            <div class="card-name">月度报告卡</div>
+          </div>
+        </div>
+      </div>
+
+      <van-cell-group title="邀请记录" v-if="records.length > 0">
+        <van-cell
+          v-for="r in records"
+          :key="r.inviteeId"
+          :title="r.inviteeNickname || r.inviteePhone || '用户'"
+          :label="formatDate(r.createdAt)"
         >
-          <div
-            v-for="record in records"
-            :key="record.id"
-            class="record-item card"
-          >
-            <van-image
-              round
-              width="40"
-              height="40"
-              :src="record.inviteeAvatar"
-              fit="cover"
-            >
-              <template #error>
-                <div class="avatar-mini">{{ (record.inviteeNickname || '?')[0] }}</div>
-              </template>
-            </van-image>
-            <div class="record-info">
-              <div class="record-name">{{ record.inviteeNickname }}</div>
-              <div class="record-date">{{ formatDate(record.createdAt) }}</div>
-            </div>
-            <div class="record-right">
-              <div class="record-commission">+{{ formatAmount(record.commission) }}</div>
-              <span class="record-status" :class="record.status">
-                {{ record.status === 'subscribed' ? '已订阅' : '已注册' }}
-              </span>
-            </div>
-          </div>
+          <template #value>
+            <van-tag :type="r.inviteeStatus === 1 ? 'success' : 'default'">
+              {{ r.inviteeStatus === 1 ? '已付费' : '试用中' }}
+            </van-tag>
+          </template>
+        </van-cell>
+      </van-cell-group>
 
-          <div v-if="records.length === 0 && !loadingRecords" class="empty-state">
-            <div class="empty-icon">📢</div>
-            <div class="empty-text">暂无邀请记录</div>
-          </div>
-        </van-list>
+      <div v-if="records.length === 0 && !loading" class="empty-state">
+        <div class="empty-icon">📢</div>
+        <div class="empty-text">暂无邀请记录</div>
+      </div>
+
+      <div class="bottom-actions">
+        <van-button type="primary" block round @click="$router.push('/promotion/withdraw')">
+          提现 (可提现¥{{ formatAmount(dashboard.availableBalance) }})
+        </van-button>
+        <van-button block round @click="$router.push('/promotion/points')" style="margin-top: 10px">
+          积分商城 ({{ dashboard.points }}积分)
+        </van-button>
       </div>
     </template>
+
+    <van-popup v-model:show="showShareGuide" position="center" round style="padding: 24px; width: 80%">
+      <div style="text-align: center">
+        <div style="font-size: 16px; font-weight: 600; margin-bottom: 12px">分享引导</div>
+        <div style="font-size: 14px; color: #666">{{ shareGuideMessage }}</div>
+        <van-button type="primary" round block style="margin-top: 16px" @click="showShareGuide = false">
+          知道了
+        </van-button>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -173,43 +202,47 @@ async function copyLink() {
   padding: 60px 0;
 }
 
-.promo-header {
+.level-card {
   text-align: center;
   padding: 24px 16px;
   background: linear-gradient(135deg, #007AFF, #5856D6);
   color: white;
 
-  .level-badge {
+  .level-title {
     font-size: 24px;
     font-weight: 700;
   }
 
-  .commission-rate {
-    display: block;
-    font-size: 14px;
-    opacity: 0.85;
-    margin-top: 6px;
+  .level-progress {
+    margin-top: 12px;
+    padding: 0 20px;
+
+    .progress-text {
+      font-size: 12px;
+      opacity: 0.85;
+      margin-top: 6px;
+    }
   }
 }
 
-.earnings-grid {
+.data-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   padding: 12px 16px;
 
-  .earning-card {
+  .data-item {
     text-align: center;
     padding: 16px 8px;
     margin: 0;
 
-    .earning-value {
+    .data-value {
       font-size: 20px;
       font-weight: 700;
       color: var(--color-text);
     }
 
-    .earning-label {
+    .data-label {
       font-size: 12px;
       color: var(--color-text-secondary);
       margin-top: 4px;
@@ -217,94 +250,35 @@ async function copyLink() {
   }
 }
 
-.invite-section {
-  .invite-title {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 12px;
+.actions {
+  padding: 16px;
+}
+
+.social-cards {
+  padding: 0 16px 16px;
+
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
   }
 
-  .invite-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 0;
-    border-bottom: 0.5px solid var(--color-divider);
+  .social-card {
+    text-align: center;
+    padding: 16px 8px;
+    margin: 0;
+    cursor: pointer;
+    transition: transform 0.15s;
 
-    &:last-child { border-bottom: none; }
+    &:active { transform: scale(0.95); }
 
-    .invite-label {
-      font-size: 14px;
-      color: var(--color-text-secondary);
-    }
-
-    .invite-value {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-
-      .code-text {
-        font-size: 16px;
-        font-weight: 600;
-        font-family: monospace;
-      }
-
-      .link-text {
-        font-size: 12px;
-        color: var(--color-text-secondary);
-        max-width: 140px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-    }
+    .card-icon { font-size: 28px; margin-bottom: 6px; }
+    .card-name { font-size: 12px; color: var(--color-text-secondary); }
   }
 }
 
-.records-section {
-  .record-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin: 0 16px 6px;
-    padding: 12px;
-
-    .avatar-mini {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: var(--color-primary);
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      font-weight: 600;
-    }
-
-    .record-info {
-      flex: 1;
-
-      .record-name { font-size: 15px; font-weight: 500; }
-      .record-date { font-size: 12px; color: var(--color-text-secondary); margin-top: 2px; }
-    }
-
-    .record-right {
-      text-align: right;
-
-      .record-commission {
-        font-size: 15px;
-        font-weight: 600;
-        color: var(--color-warning);
-      }
-
-      .record-status {
-        font-size: 11px;
-
-        &.subscribed { color: var(--color-success); }
-        &.registered { color: var(--color-text-secondary); }
-      }
-    }
-  }
+.bottom-actions {
+  padding: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
 }
 </style>

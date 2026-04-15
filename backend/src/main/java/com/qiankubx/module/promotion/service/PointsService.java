@@ -16,12 +16,15 @@ import com.qiankubx.module.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -34,6 +37,7 @@ public class PointsService {
     private final ChainHashService chainHashService;
     private final DataSignService dataSignService;
     private final UserMapper userMapper;
+    private final StringRedisTemplate stringRedisTemplate;
     @Lazy
     private final CouponService couponService;
 
@@ -161,6 +165,30 @@ public class PointsService {
                 }
                 userMapper.updateById(user);
             }
+        }
+    }
+
+    public void recordDailyShare(Long userId) {
+        String key = "daily_share:" + userId + ":" + LocalDate.now();
+        Boolean alreadyShared = stringRedisTemplate.hasKey(key);
+        if (Boolean.TRUE.equals(alreadyShared)) {
+            return;
+        }
+
+        addPoints(userId, 2, "daily_share", null, "每日分享");
+        stringRedisTemplate.opsForValue().set(key, "1", 2, TimeUnit.DAYS);
+
+        int consecutiveDays = 0;
+        for (int i = 0; i < 7; i++) {
+            String dayKey = "daily_share:" + userId + ":" + LocalDate.now().minusDays(i);
+            if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(dayKey))) {
+                consecutiveDays++;
+            } else {
+                break;
+            }
+        }
+        if (consecutiveDays == 7) {
+            addPoints(userId, 20, "share_streak_7", null, "连续7天分享奖励");
         }
     }
 

@@ -4,29 +4,29 @@
       <h2>推广中心</h2>
     </div>
 
-    <el-row :gutter="16" class="stat-cards" v-if="promotionInfo">
+    <el-row :gutter="16" class="stat-cards" v-if="dashboard">
       <el-col :span="6">
         <div class="stat-card">
-          <div class="stat-value" style="color: #007AFF">{{ promotionInfo.inviteCount }}</div>
+          <div class="stat-value" style="color: #007AFF">{{ dashboard.totalInvite }}</div>
           <div class="stat-label">邀请人数</div>
         </div>
       </el-col>
       <el-col :span="6">
         <div class="stat-card">
-          <div class="stat-value" style="color: #34C759">{{ formatAmount(promotionInfo.totalEarnings) }}</div>
+          <div class="stat-value" style="color: #34C759">{{ formatAmount(dashboard.totalCommission) }}</div>
           <div class="stat-label">累计收益</div>
         </div>
       </el-col>
       <el-col :span="6">
         <div class="stat-card">
-          <div class="stat-value" style="color: #FF9500">{{ formatAmount(promotionInfo.monthlyEarnings) }}</div>
-          <div class="stat-label">本月收益</div>
+          <div class="stat-value" style="color: #FF9500">{{ formatAmount(dashboard.availableBalance) }}</div>
+          <div class="stat-label">可提现</div>
         </div>
       </el-col>
       <el-col :span="6">
         <div class="stat-card">
-          <div class="stat-value" style="color: #5856D6">{{ (promotionInfo.commissionRate * 100).toFixed(0) }}%</div>
-          <div class="stat-label">佣金比例</div>
+          <div class="stat-value" style="color: #5856D6">{{ dashboard.levelInfo?.levelName }} Lv.{{ dashboard.levelInfo?.level }}</div>
+          <div class="stat-label">推广等级</div>
         </div>
       </el-col>
     </el-row>
@@ -38,7 +38,7 @@
             <span>推广链接</span>
           </template>
           <div class="promo-section">
-            <p>邀请码：<strong>{{ promotionInfo?.inviteCode || '-' }}</strong></p>
+            <p>邀请码：<strong>{{ codeInfo?.inviteCode || '-' }}</strong></p>
             <el-input v-model="inviteLink" readonly style="margin: 12px 0">
               <template #append>
                 <el-button @click="handleCopy">复制链接</el-button>
@@ -66,39 +66,29 @@
         <el-table-column label="用户" min-width="160">
           <template #default="{ row }">
             <div class="user-cell">
-              <el-avatar :size="32" :src="row.inviteeAvatar">
+              <el-avatar :size="32" :src="row.inviteeAvatarUrl">
                 {{ row.inviteeNickname?.charAt(0) }}
               </el-avatar>
-              <span>{{ row.inviteeNickname || formatPhone(row.inviteePhone) }}</span>
+              <span>{{ row.inviteeNickname || '用户' }}</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
+        <el-table-column prop="level" label="层级" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'subscribed' ? 'success' : 'info'" size="small">
-              {{ row.status === 'subscribed' ? '已订阅' : '已注册' }}
-            </el-tag>
+            {{ row.level === 1 ? '直邀' : '二级' }}
           </template>
         </el-table-column>
-        <el-table-column prop="commission" label="佣金" width="120" align="right">
+        <el-table-column prop="inviteeStatus" label="状态" width="100">
           <template #default="{ row }">
-            <span v-if="row.commission > 0" class="commission">+{{ formatAmount(row.commission) }}</span>
-            <span v-else>-</span>
+            <el-tag :type="row.inviteeStatus === 1 ? 'success' : 'info'" size="small">
+              {{ row.inviteeStatus === 1 ? '已付费' : '试用中' }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="时间" width="170">
           <template #default="{ row }">{{ formatDate(row.createdAt, 'YYYY-MM-DD HH:mm') }}</template>
         </el-table-column>
       </el-table>
-
-      <el-pagination
-        v-model:current-page="page"
-        :page-size="10"
-        :total="totalRecords"
-        layout="prev, pager, next"
-        style="margin-top: 16px; justify-content: flex-end"
-        @current-change="loadRecords"
-      />
     </el-card>
   </div>
 </template>
@@ -107,37 +97,35 @@
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import {
-  getPromotionInfo,
-  getPromotionStats,
+  getPromotionDashboard,
+  getInviteCode,
   getInviteRecords,
   formatAmount,
   formatDate,
-  formatPhone,
   copyToClipboard,
-  type PromotionInfoVO,
+  type DashboardVO,
+  type InviteCodeVO,
   type InviteRecordVO,
 } from '@qianku/shared'
 import { ElMessage } from 'element-plus'
 
-const promotionInfo = ref<PromotionInfoVO | null>(null)
+const dashboard = ref<DashboardVO | null>(null)
+const codeInfo = ref<InviteCodeVO | null>(null)
 const inviteLink = ref('')
 const records = ref<InviteRecordVO[]>([])
-const totalRecords = ref(0)
-const page = ref(1)
 const loadingRecords = ref(false)
 const chartRef = ref<HTMLElement>()
 let chart: echarts.ECharts | null = null
 
 async function loadData() {
   try {
-    const [info, stats] = await Promise.allSettled([
-      getPromotionInfo(),
-      getPromotionStats(),
+    const [dashboardData, codeData] = await Promise.all([
+      getPromotionDashboard(),
+      getInviteCode(),
     ])
-    if (info.status === 'fulfilled') {
-      promotionInfo.value = info.value
-      inviteLink.value = info.value.inviteLink
-    }
+    dashboard.value = dashboardData
+    codeInfo.value = codeData
+    inviteLink.value = codeData.inviteLink
     await nextTick()
     renderChart()
   } catch {
@@ -148,9 +136,8 @@ async function loadData() {
 async function loadRecords() {
   loadingRecords.value = true
   try {
-    const res = await getInviteRecords({ pageNum: page.value, pageSize: 10 })
-    records.value = res.list
-    totalRecords.value = res.total
+    const res = await getInviteRecords()
+    records.value = res
   } catch {
     records.value = []
   } finally {
@@ -159,7 +146,7 @@ async function loadRecords() {
 }
 
 function renderChart() {
-  if (!chartRef.value || !promotionInfo.value) return
+  if (!chartRef.value || !dashboard.value) return
   if (!chart) chart = echarts.init(chartRef.value)
 
   chart.setOption({
@@ -168,8 +155,9 @@ function renderChart() {
       type: 'pie',
       radius: ['40%', '60%'],
       data: [
-        { name: '本月收益', value: promotionInfo.value.monthlyEarnings, itemStyle: { color: '#34C759' } },
-        { name: '历史收益', value: Math.max(0, promotionInfo.value.totalEarnings - promotionInfo.value.monthlyEarnings), itemStyle: { color: '#007AFF' } },
+        { name: '可提现', value: dashboard.value.availableBalance, itemStyle: { color: '#34C759' } },
+        { name: '冻结中', value: dashboard.value.frozenBalance, itemStyle: { color: '#FF9500' } },
+        { name: '已提现', value: Math.max(0, dashboard.value.totalCommission - dashboard.value.availableBalance - dashboard.value.frozenBalance), itemStyle: { color: '#007AFF' } },
       ],
       label: { formatter: '{b}\n¥{c}' },
     }],

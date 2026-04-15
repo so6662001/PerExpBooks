@@ -2,36 +2,31 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showDialog } from 'vant'
-import { getPromotionInfo, formatDate, post } from '@qianku/shared'
-import type { PromotionInfoVO } from '@qianku/shared'
+import { getPromotionDashboard, getPointsLog, redeemPoints, formatDate } from '@qianku/shared'
+import type { DashboardVO, PointsLogVO } from '@qianku/shared'
 
 defineOptions({ name: 'PromotionPoints' })
 
 const router = useRouter()
-const info = ref<PromotionInfoVO | null>(null)
+const dashboard = ref<DashboardVO | null>(null)
+const pointRecords = ref<PointsLogVO[]>([])
 const loading = ref(true)
 
-interface PointRecord {
-  id: string
-  type: string
-  points: number
-  description: string
-  createdAt: string
-}
-
-const pointRecords = ref<PointRecord[]>([])
-
 const exchangeOptions = [
-  { points: 50, reward: '5元优惠券', icon: '🎫' },
-  { points: 100, reward: '10元优惠券', icon: '🎫' },
-  { points: 200, reward: '25元优惠券', icon: '🎁' },
-  { points: 500, reward: '会员月卡', icon: '👑' },
+  { redeemType: '1', points: 50, reward: '7天会员', icon: '📅' },
+  { redeemType: '2', points: 100, reward: '¥10优惠券', icon: '🎫' },
+  { redeemType: '3', points: 200, reward: '1月会员', icon: '👑' },
+  { redeemType: '4', points: 500, reward: '年度会员', icon: '💎' },
 ]
 
 onMounted(async () => {
   try {
-    info.value = await getPromotionInfo()
-    // Points records would come from a dedicated API
+    const [dashboardData, logsData] = await Promise.all([
+      getPromotionDashboard(),
+      getPointsLog(),
+    ])
+    dashboard.value = dashboardData
+    pointRecords.value = logsData
   } catch (e: any) {
     showToast(e.message || '加载失败')
   } finally {
@@ -40,7 +35,7 @@ onMounted(async () => {
 })
 
 async function handleExchange(option: typeof exchangeOptions[0]) {
-  if (!info.value || info.value.pointsBalance < option.points) {
+  if (!dashboard.value || dashboard.value.points < option.points) {
     showToast('积分不足')
     return
   }
@@ -50,11 +45,14 @@ async function handleExchange(option: typeof exchangeOptions[0]) {
       message: `消耗 ${option.points} 积分兑换 ${option.reward}？`,
       showCancelButton: true,
     })
-    await post('/promotion/points/exchange', { points: option.points })
+    await redeemPoints({ redeemType: option.redeemType })
     showToast({ message: '兑换成功', type: 'success' })
-    if (info.value) {
-      info.value.pointsBalance -= option.points
-    }
+    const [dashboardData, logsData] = await Promise.all([
+      getPromotionDashboard(),
+      getPointsLog(),
+    ])
+    dashboard.value = dashboardData
+    pointRecords.value = logsData
   } catch {
     // cancelled or failed
   }
@@ -70,14 +68,14 @@ async function handleExchange(option: typeof exchangeOptions[0]) {
     <template v-if="!loading">
       <div class="points-header">
         <div class="points-label">当前积分</div>
-        <div class="points-value">{{ info?.pointsBalance || 0 }}</div>
+        <div class="points-value">{{ dashboard?.points || 0 }}</div>
       </div>
 
       <div class="section-title">积分兑换</div>
       <div class="exchange-grid">
         <div
           v-for="option in exchangeOptions"
-          :key="option.points"
+          :key="option.redeemType"
           class="exchange-card card"
           @click="handleExchange(option)"
         >
@@ -88,7 +86,7 @@ async function handleExchange(option: typeof exchangeOptions[0]) {
             type="primary"
             size="mini"
             round
-            :disabled="!info || info.pointsBalance < option.points"
+            :disabled="!dashboard || dashboard.points < option.points"
           >
             兑换
           </van-button>
@@ -100,7 +98,7 @@ async function handleExchange(option: typeof exchangeOptions[0]) {
       <div v-if="pointRecords.length > 0" class="records-list">
         <div v-for="record in pointRecords" :key="record.id" class="record-item card">
           <div class="record-info">
-            <div class="record-desc">{{ record.description }}</div>
+            <div class="record-desc">{{ record.remark }}</div>
             <div class="record-date">{{ formatDate(record.createdAt, 'YYYY-MM-DD HH:mm') }}</div>
           </div>
           <div class="record-points" :class="record.points > 0 ? 'positive' : 'negative'">

@@ -3,42 +3,42 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import {
-  getPromotionInfo,
-  createWithdrawal,
+  getWithdrawalBalance,
+  applyWithdrawal,
   getWithdrawalRecords,
   formatAmount,
   formatDate,
 } from '@qianku/shared'
-import type { PromotionInfoVO, WithdrawalVO } from '@qianku/shared'
+import type { BalanceVO, WithdrawalVO } from '@qianku/shared'
 
 defineOptions({ name: 'PromotionWithdraw' })
 
 const router = useRouter()
-const info = ref<PromotionInfoVO | null>(null)
+const balance = ref<BalanceVO | null>(null)
 const records = ref<WithdrawalVO[]>([])
 const loading = ref(true)
 const submitting = ref(false)
 
 const amount = ref<number | undefined>(undefined)
-const method = ref<'wechat' | 'alipay'>('wechat')
+const withdrawType = ref(1)
 
 const methods = [
-  { value: 'wechat', label: '微信', icon: '💬' },
-  { value: 'alipay', label: '支付宝', icon: '🔵' },
+  { value: 1, label: '微信', icon: '💬' },
+  { value: 2, label: '支付宝', icon: '🔵' },
 ]
 
 const canSubmit = computed(() =>
-  amount.value && amount.value >= 50 && info.value && amount.value <= info.value.totalEarnings,
+  amount.value && amount.value >= 50 && balance.value && amount.value <= balance.value.availableBalance,
 )
 
 onMounted(async () => {
   try {
-    const [infoData, recordData] = await Promise.all([
-      getPromotionInfo(),
-      getWithdrawalRecords({ pageNum: 1, pageSize: 50 }),
+    const [balanceData, recordData] = await Promise.all([
+      getWithdrawalBalance(),
+      getWithdrawalRecords(),
     ])
-    info.value = infoData
-    records.value = recordData.list
+    balance.value = balanceData
+    records.value = recordData
   } catch (e: any) {
     showToast(e.message || '加载失败')
   } finally {
@@ -46,22 +46,20 @@ onMounted(async () => {
   }
 })
 
-function getStatusLabel(status: string) {
-  const map: Record<string, string> = {
-    pending: '审核中',
-    processing: '处理中',
-    completed: '已到账',
-    rejected: '已拒绝',
+function getStatusLabel(status: number) {
+  const map: Record<number, string> = {
+    0: '处理中',
+    1: '已完成',
+    2: '已拒绝',
   }
-  return map[status] || status
+  return map[status] || '未知'
 }
 
-function getStatusColor(status: string) {
-  const map: Record<string, string> = {
-    pending: '#FF9500',
-    processing: '#007AFF',
-    completed: '#34C759',
-    rejected: '#FF3B30',
+function getStatusColor(status: number) {
+  const map: Record<number, string> = {
+    0: '#FF9500',
+    1: '#34C759',
+    2: '#FF3B30',
   }
   return map[status] || '#999'
 }
@@ -70,18 +68,18 @@ async function handleSubmit() {
   if (!canSubmit.value) return
   submitting.value = true
   try {
-    await createWithdrawal({
+    await applyWithdrawal({
       amount: amount.value!,
-      method: method.value,
-      account: '',
-      accountName: '',
+      withdrawType: withdrawType.value,
     })
     showToast({ message: '申请已提交', type: 'success' })
     amount.value = undefined
-    const recordData = await getWithdrawalRecords({ pageNum: 1, pageSize: 50 })
-    records.value = recordData.list
-    const infoData = await getPromotionInfo()
-    info.value = infoData
+    const [balanceData, recordData] = await Promise.all([
+      getWithdrawalBalance(),
+      getWithdrawalRecords(),
+    ])
+    balance.value = balanceData
+    records.value = recordData
   } catch (e: any) {
     showToast(e.message || '提交失败')
   } finally {
@@ -99,7 +97,7 @@ async function handleSubmit() {
     <template v-if="!loading">
       <div class="balance-card card">
         <div class="balance-label">可提现余额</div>
-        <div class="balance-value">{{ formatAmount(info?.totalEarnings || 0) }}</div>
+        <div class="balance-value">{{ formatAmount(balance?.availableBalance || 0) }}</div>
       </div>
 
       <div class="form-section card">
@@ -122,8 +120,8 @@ async function handleSubmit() {
               v-for="m in methods"
               :key="m.value"
               class="method-item"
-              :class="{ active: method === m.value }"
-              @click="method = m.value as 'wechat' | 'alipay'"
+              :class="{ active: withdrawType === m.value }"
+              @click="withdrawType = m.value"
             >
               <span class="method-icon">{{ m.icon }}</span>
               <span class="method-name">{{ m.label }}</span>

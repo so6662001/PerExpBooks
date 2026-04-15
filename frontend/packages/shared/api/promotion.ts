@@ -1,12 +1,21 @@
-import { get } from './request'
-import type { PromotionInfoVO, InviteRecordVO, InviteRecordQueryDTO } from '../types/promotion'
-import type { PageResult } from '../types/common'
+import { get, post } from './request'
 
-export const getPromotionInfo = () =>
-  get<PromotionInfoVO>('/promotion/info')
+export const getPromotionDashboard = () => get('/promotion/dashboard')
 
-export const getInviteRecords = (params?: InviteRecordQueryDTO) =>
-  get<PageResult<InviteRecordVO>>('/promotion/invite-records', { params })
+export const getInviteCode = () => get('/promotion/invite-code')
 
-export const getPromotionStats = () =>
-  get<{ totalEarnings: number; monthlyEarnings: number; inviteCount: number }>('/promotion/stats')
+export const getInviteRecords = () => get('/promotion/invite-records')
+
+export const getCommissionRecords = () => get('/promotion/commission')
+
+export const getPointsLog = () => get('/promotion/points-log')
+
+export const redeemPoints = (data: { redeemType: string }) => post('/promotion/points/redeem', data)
+
+export const getLevelInfo = () => get('/promotion/level-info')
+
+export const getPoster = (params?: { type?: string }) => get('/promotion/poster', { params })
+
+export const generateCustomCard = (data: { cardType: string }) => post('/promotion/poster/custom', data)
+
+export const recordDailyShare = () => post('/promotion/daily-share')

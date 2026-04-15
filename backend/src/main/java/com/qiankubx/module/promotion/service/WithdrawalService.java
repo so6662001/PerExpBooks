@@ -29,6 +29,7 @@ public class WithdrawalService {
     private final PromoterLevelMapper promoterLevelMapper;
     private final PromoterLevelService promoterLevelService;
     private final DataSignService dataSignService;
+    private final AntiCheatService antiCheatService;
 
     @Transactional(rollbackFor = Exception.class)
     public void applyWithdraw(Long userId, BigDecimal amount, Integer withdrawType) {
@@ -40,6 +41,8 @@ public class WithdrawalService {
         if (level.getAvailableBalance().compareTo(amount) < 0) {
             throw new BizException(400, "可提现余额不足");
         }
+
+        antiCheatService.assertWithdrawalNotFlagged(userId);
 
         LocalDateTime monthStart = LocalDateTime.now().with(TemporalAdjusters.firstDayOfMonth()).withHour(0).withMinute(0).withSecond(0);
         Long monthCount = withdrawalMapper.selectCount(

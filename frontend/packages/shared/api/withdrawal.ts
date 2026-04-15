@@ -1,12 +1,8 @@
 import { get, post } from './request'
-import type { WithdrawalCreateDTO, WithdrawalVO } from '../types/promotion'
-import type { PageResult, PageQuery } from '../types/common'
 
-export const createWithdrawal = (data: WithdrawalCreateDTO) =>
-  post<WithdrawalVO>('/withdrawal', data)
+export const applyWithdrawal = (data: { amount: number; withdrawType: number }) =>
+  post('/withdrawal/apply', data)
 
-export const getWithdrawalRecords = (params?: PageQuery) =>
-  get<PageResult<WithdrawalVO>>('/withdrawal/list', { params })
+export const getWithdrawalRecords = () => get('/withdrawal/records')
 
-export const getWithdrawalDetail = (id: string) =>
-  get<WithdrawalVO>(`/withdrawal/${id}`)
+export const getWithdrawalBalance = () => get('/withdrawal/balance')
