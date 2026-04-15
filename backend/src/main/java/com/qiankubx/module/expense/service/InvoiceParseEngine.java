@@ -17,6 +17,12 @@ import java.util.regex.Pattern;
 @Service
 public class InvoiceParseEngine {
 
+    private final OcrApiService ocrApiService;
+
+    public InvoiceParseEngine(OcrApiService ocrApiService) {
+        this.ocrApiService = ocrApiService;
+    }
+
     private static final Pattern INVOICE_NO_PATTERN =
             Pattern.compile("发票号码[：:]\\s*(\\d{8,20})");
     private static final Pattern INVOICE_CODE_PATTERN =
@@ -34,10 +40,23 @@ public class InvoiceParseEngine {
     private static final Pattern BUYER_PATTERN =
             Pattern.compile("购[买方].*?名称[：:]\\s*(.+?)(?:\\s|$)");
 
-    /**
-     * Level 1: PDFBox text extraction + regex parsing
-     */
     public InvoiceUploadVO parseFromPdf(byte[] pdfBytes) {
+        InvoiceUploadVO vo = parseWithPdfBox(pdfBytes);
+        if ((vo.getParsedSuccess() == null || !vo.getParsedSuccess()) || vo.getAmount() == null) {
+            log.info("PDFBox解析结果不完整，降级到OCR识别");
+            try {
+                InvoiceUploadVO ocrResult = ocrApiService.recognizeInvoice(pdfBytes);
+                if (ocrResult.getParseSuccess() != null && ocrResult.getParseSuccess()) {
+                    return ocrResult;
+                }
+            } catch (Exception e) {
+                log.warn("OCR降级识别失败", e);
+            }
+        }
+        return vo;
+    }
+
+    private InvoiceUploadVO parseWithPdfBox(byte[] pdfBytes) {
         InvoiceUploadVO vo = new InvoiceUploadVO();
         vo.setParsedSuccess(false);
 

@@ -9,6 +9,7 @@ import com.qiankubx.module.coupon.service.CouponService;
 import com.qiankubx.module.member.dto.*;
 import com.qiankubx.module.member.entity.MemberOrder;
 import com.qiankubx.module.member.mapper.MemberOrderMapper;
+import com.qiankubx.common.config.RabbitMQConfig;
 import com.qiankubx.module.promotion.service.CommissionService;
 import com.qiankubx.module.team.entity.Team;
 import com.qiankubx.module.team.entity.TeamMember;
@@ -18,6 +19,7 @@ import com.qiankubx.module.user.entity.User;
 import com.qiankubx.module.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -38,6 +41,7 @@ public class MemberService {
     private final MemberOrderMapper memberOrderMapper;
     private final UserMapper userMapper;
     private final DataSignService dataSignService;
+    private final RabbitTemplate rabbitTemplate;
     @Lazy
     private final CouponService couponService;
     @Lazy
@@ -258,9 +262,18 @@ public class MemberService {
                 order.getUserId(), orderNo, order.getPlanType(), memberEnd);
 
         try {
-            commissionService.triggerCommission(order.getId());
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConfig.EXCHANGE_QIANKU,
+                    RabbitMQConfig.ROUTING_PAY_SUCCESS,
+                    Map.of("orderId", order.getId(), "userId", order.getUserId()));
+            log.info("支付成功MQ消息已发送: orderId={}, userId={}", order.getId(), order.getUserId());
         } catch (Exception e) {
-            log.error("触发返佣失败: orderId={}", order.getId(), e);
+            log.error("发送支付成功MQ消息失败，降级为同步处理: orderId={}", order.getId(), e);
+            try {
+                commissionService.triggerCommission(order.getId());
+            } catch (Exception ex) {
+                log.error("同步触发返佣也失败: orderId={}", order.getId(), ex);
+            }
         }
     }
 

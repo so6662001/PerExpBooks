@@ -87,5 +87,9 @@ qianku:
       merged: merged/
       zip: zip/
       poster: poster/
+  ocr:
+    baidu:
+      api-key: ${BAIDU_OCR_API_KEY:}
+      secret-key: ${BAIDU_OCR_SECRET_KEY:}
   security:
     sign-key: ${SIGN_KEY:qianku-data-sign-hmac-sha256-secret-key-32b}

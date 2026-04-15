@@ -2,6 +2,7 @@ package com.qiankubx.module.reimbursement.service;
 
 import com.aliyun.oss.OSS;
 import com.itextpdf.io.font.PdfEncodings;
+import com.itextpdf.io.font.constants.StandardFonts;
 import com.itextpdf.kernel.colors.ColorConstants;
 import com.itextpdf.kernel.colors.DeviceRgb;
 import com.itextpdf.kernel.font.PdfFont;
@@ -132,7 +133,7 @@ public class PdfCoverService {
         Paragraph title = new Paragraph("费用报销单")
                 .setFont(font)
                 .setFontSize(22)
-                .simulateBold()
+                .setBold()
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMarginBottom(20);
         document.add(title);
@@ -172,7 +173,7 @@ public class PdfCoverService {
         Paragraph subtitle = new Paragraph("费用明细")
                 .setFont(font)
                 .setFontSize(14)
-                .simulateBold()
+                .setBold()
                 .setMarginTop(10)
                 .setMarginBottom(8);
         document.add(subtitle);
@@ -184,7 +185,7 @@ public class PdfCoverService {
         String[] headers = {"序号", "费用类别", "发票号码", "金额(元)", "备注"};
         for (String header : headers) {
             table.addHeaderCell(new Cell()
-                    .add(new Paragraph(header).setFont(font).setFontSize(9).simulateBold())
+                    .add(new Paragraph(header).setFont(font).setFontSize(9).setBold())
                     .setBackgroundColor(HEADER_BG)
                     .setFontColor(ColorConstants.WHITE)
                     .setTextAlignment(TextAlignment.CENTER)
@@ -239,14 +240,14 @@ public class PdfCoverService {
                 .setMarginTop(5);
 
         totalTable.addCell(new Cell()
-                .add(new Paragraph("合计金额").setFont(font).setFontSize(11).simulateBold())
+                .add(new Paragraph("合计金额").setFont(font).setFontSize(11).setBold())
                 .setTextAlignment(TextAlignment.RIGHT)
                 .setBorder(Border.NO_BORDER)
                 .setPadding(5));
 
         totalTable.addCell(new Cell()
                 .add(new Paragraph("¥ " + reimbursement.getTotalAmount().toPlainString())
-                        .setFont(font).setFontSize(11).simulateBold()
+                        .setFont(font).setFontSize(11).setBold()
                         .setFontColor(new DeviceRgb(220, 53, 69)))
                 .setTextAlignment(TextAlignment.RIGHT)
                 .setBorder(Border.NO_BORDER)
@@ -267,7 +268,7 @@ public class PdfCoverService {
         Paragraph subtitle = new Paragraph("附件清单")
                 .setFont(font)
                 .setFontSize(14)
-                .simulateBold()
+                .setBold()
                 .setMarginTop(15)
                 .setMarginBottom(8);
         document.add(subtitle);

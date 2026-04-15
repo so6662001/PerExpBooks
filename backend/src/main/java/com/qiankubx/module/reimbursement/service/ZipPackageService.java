@@ -1,21 +1,23 @@
 package com.qiankubx.module.reimbursement.service;
 
-import com.alibaba.excel.EasyExcel;
-import com.alibaba.excel.annotation.ExcelProperty;
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.model.OSSObject;
 import com.qiankubx.common.config.OssConfig;
 import com.qiankubx.module.expense.entity.Expense;
 import com.qiankubx.module.reimbursement.entity.Reimbursement;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -109,29 +111,50 @@ public class ZipPackageService {
 
     private void addExcelManifest(ZipOutputStream zos, List<Expense> expenses,
                                   Reimbursement reimbursement) throws Exception {
-        List<InvoiceExcelRow> rows = new ArrayList<>();
-        for (int i = 0; i < expenses.size(); i++) {
-            Expense expense = expenses.get(i);
-            InvoiceExcelRow row = new InvoiceExcelRow();
-            row.setIndex(i + 1);
-            row.setCategoryName(expense.getInvoiceType());
-            row.setInvoiceNo(expense.getInvoiceNo());
-            row.setAmount(expense.getAmount() != null ? expense.getAmount().toPlainString() : "0");
-            row.setExpenseDate(expense.getExpenseDate() != null ? expense.getExpenseDate().toString() : "");
-            row.setSeller(expense.getSellerName());
-            row.setRemark(expense.getDescription());
-            row.setHasFile(expense.getFileUrl() != null && !expense.getFileUrl().isBlank() ? "是" : "否");
-            rows.add(row);
-        }
-
-        ByteArrayOutputStream excelBaos = new ByteArrayOutputStream();
-        EasyExcel.write(excelBaos, InvoiceExcelRow.class)
-                .sheet("发票清单")
-                .doWrite(rows);
-
+        byte[] excelBytes = generateExcelBytes(reimbursement, expenses);
         zos.putNextEntry(new ZipEntry("发票清单_" + reimbursement.getReimburseNo() + ".xlsx"));
-        zos.write(excelBaos.toByteArray());
+        zos.write(excelBytes);
         zos.closeEntry();
+    }
+
+    private byte[] generateExcelBytes(Reimbursement reimbursement, List<Expense> expenses) throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            XSSFSheet sheet = workbook.createSheet("发票清单");
+
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+
+            XSSFRow headerRow = sheet.createRow(0);
+            String[] headers = {"序号", "类别", "发票号码", "金额(元)", "日期", "销方", "备注", "有原件"};
+            for (int i = 0; i < headers.length; i++) {
+                XSSFCell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            for (int i = 0; i < expenses.size(); i++) {
+                Expense e = expenses.get(i);
+                XSSFRow row = sheet.createRow(i + 1);
+                row.createCell(0).setCellValue(i + 1);
+                row.createCell(1).setCellValue(e.getInvoiceType() != null ? e.getInvoiceType() : "其他");
+                row.createCell(2).setCellValue(e.getInvoiceNo() != null ? e.getInvoiceNo() : "-");
+                row.createCell(3).setCellValue(e.getAmount() != null ? e.getAmount().doubleValue() : 0);
+                row.createCell(4).setCellValue(e.getExpenseDate() != null ? e.getExpenseDate().toString() : "");
+                row.createCell(5).setCellValue(e.getSellerName() != null ? e.getSellerName() : "");
+                row.createCell(6).setCellValue(e.getDescription() != null ? e.getDescription() : "");
+                row.createCell(7).setCellValue(e.getFileUrl() != null && !e.getFileUrl().isBlank() ? "是" : "否");
+            }
+
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            workbook.write(baos);
+            return baos.toByteArray();
+        }
     }
 
     private byte[] downloadBytes(String objectKey) {
@@ -170,25 +193,5 @@ public class ZipPackageService {
             return domain + "/" + objectKey;
         }
         return "https://" + ossConfig.getBucketName() + "." + ossConfig.getEndpoint() + "/" + objectKey;
-    }
-
-    @Data
-    public static class InvoiceExcelRow {
-        @ExcelProperty("序号")
-        private Integer index;
-        @ExcelProperty("类别")
-        private String categoryName;
-        @ExcelProperty("发票号码")
-        private String invoiceNo;
-        @ExcelProperty("金额(元)")
-        private String amount;
-        @ExcelProperty("日期")
-        private String expenseDate;
-        @ExcelProperty("销方")
-        private String seller;
-        @ExcelProperty("备注")
-        private String remark;
-        @ExcelProperty("有原件")
-        private String hasFile;
     }
 }

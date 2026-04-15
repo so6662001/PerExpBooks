@@ -39,6 +39,8 @@ public class ExpenseService {
     private final OssConfig ossConfig;
     private final DataSignService dataSignService;
     private final InvoiceParseEngine invoiceParseEngine;
+    private final OfdParseService ofdParseService;
+    private final OcrApiService ocrApiService;
     private final UserMapper userMapper;
 
     public InvoiceUploadVO uploadInvoice(Long userId, MultipartFile file) {
@@ -88,15 +90,14 @@ public class ExpenseService {
             result.setParseSuccess(result.getParsedSuccess() != null && result.getParsedSuccess());
             result.setParseMessage(result.getParseSuccess() ? "PDF发票解析成功" : "PDF发票解析未能提取完整信息，请手动补充");
         } else if ("ofd".equals(ext)) {
-            result = new InvoiceUploadVO();
-            result.setParsedSuccess(false);
-            result.setParseSuccess(false);
-            result.setParseMessage("OFD格式暂不支持自动解析，请手动填写信息");
+            result = ofdParseService.parseFromOfd(fileBytes);
+        } else if (Set.of("jpg", "jpeg", "png").contains(ext)) {
+            result = ocrApiService.recognizeInvoice(fileBytes);
         } else {
             result = new InvoiceUploadVO();
             result.setParsedSuccess(false);
             result.setParseSuccess(false);
-            result.setParseMessage("图片发票暂不支持自动解析，请手动填写信息");
+            result.setParseMessage("不支持的文件格式");
         }
         result.setFileUrl(fileUrl);
         result.setFileName(originalFilename);

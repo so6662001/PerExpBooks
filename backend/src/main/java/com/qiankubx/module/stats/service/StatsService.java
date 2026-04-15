@@ -1,11 +1,16 @@
 package com.qiankubx.module.stats.service;
 
-import com.alibaba.excel.EasyExcel;
 import com.qiankubx.module.stats.mapper.StatsMapper;
 import com.qiankubx.module.stats.vo.*;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -167,27 +172,53 @@ public class StatsService {
             rows = statsMapper.selectExpenseForExport(userId, startDate, endDate);
         }
 
-        List<ExpenseExcelVO> excelData = new ArrayList<>();
-        for (Map<String, Object> row : rows) {
-            ExpenseExcelVO vo = new ExpenseExcelVO();
-            vo.setExpenseDate(row.get("expenseDate") != null ? row.get("expenseDate").toString() : "");
-            vo.setCategoryName((String) row.get("categoryName"));
-            vo.setAmount(row.get("amount") != null ? new BigDecimal(row.get("amount").toString()) : null);
-            vo.setTaxAmount(row.get("taxAmount") != null ? new BigDecimal(row.get("taxAmount").toString()) : null);
-            vo.setInvoiceNo((String) row.get("invoiceNo"));
-            vo.setInvoiceType((String) row.get("invoiceType"));
-            vo.setSellerName((String) row.get("sellerName"));
-            vo.setDescription((String) row.get("description"));
-            Object status = row.get("reimburseStatus");
-            vo.setReimburseStatusName(getReimburseStatusName(status != null ? ((Number) status).intValue() : 0));
-            excelData.add(vo);
-        }
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            XSSFSheet sheet = workbook.createSheet("费用明细");
 
-        try {
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+
+            XSSFRow headerRow = sheet.createRow(0);
+            String[] headers = {"费用日期", "类别", "金额", "税额", "发票号", "发票类型", "销方名称", "描述", "报销状态"};
+            for (int i = 0; i < headers.length; i++) {
+                XSSFCell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            for (int i = 0; i < rows.size(); i++) {
+                Map<String, Object> row = rows.get(i);
+                XSSFRow dataRow = sheet.createRow(i + 1);
+                dataRow.createCell(0).setCellValue(row.get("expenseDate") != null ? row.get("expenseDate").toString() : "");
+                dataRow.createCell(1).setCellValue(row.get("categoryName") != null ? row.get("categoryName").toString() : "");
+                if (row.get("amount") != null) {
+                    dataRow.createCell(2).setCellValue(new BigDecimal(row.get("amount").toString()).doubleValue());
+                } else {
+                    dataRow.createCell(2).setCellValue(0);
+                }
+                if (row.get("taxAmount") != null) {
+                    dataRow.createCell(3).setCellValue(new BigDecimal(row.get("taxAmount").toString()).doubleValue());
+                } else {
+                    dataRow.createCell(3).setCellValue(0);
+                }
+                dataRow.createCell(4).setCellValue(row.get("invoiceNo") != null ? row.get("invoiceNo").toString() : "");
+                dataRow.createCell(5).setCellValue(row.get("invoiceType") != null ? row.get("invoiceType").toString() : "");
+                dataRow.createCell(6).setCellValue(row.get("sellerName") != null ? row.get("sellerName").toString() : "");
+                dataRow.createCell(7).setCellValue(row.get("description") != null ? row.get("description").toString() : "");
+                Object status = row.get("reimburseStatus");
+                dataRow.createCell(8).setCellValue(getReimburseStatusName(status != null ? ((Number) status).intValue() : 0));
+            }
+
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
             response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
             String fileName = URLEncoder.encode("费用明细_" + startDate + "_" + endDate, StandardCharsets.UTF_8);
             response.setHeader("Content-Disposition", "attachment; filename=" + fileName + ".xlsx");
-            EasyExcel.write(response.getOutputStream(), ExpenseExcelVO.class).sheet("费用明细").doWrite(excelData);
+            workbook.write(response.getOutputStream());
         } catch (Exception e) {
             log.error("导出Excel失败", e);
             throw new RuntimeException("导出失败", e);
