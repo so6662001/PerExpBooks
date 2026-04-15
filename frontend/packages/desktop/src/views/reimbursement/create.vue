@@ -102,6 +102,7 @@ import {
   type ExpenseVO,
 } from '@qianku/shared'
 import { ElMessage } from 'element-plus'
+import { Tracker } from '@qianku/shared/analytics'
 
 const route = useRoute()
 const router = useRouter()
@@ -166,6 +167,7 @@ async function handleSubmit() {
       remark: form.value.remark,
       expenseIds: selectedExpenses.value.map(e => e.id),
     })
+    try { Tracker.getInstance().track('reimburse_generate', { itemCount: selectedExpenses.value.length, totalAmount: totalAmount.value }) } catch {}
     ElMessage.success('报销单创建成功')
     router.push(`/reimbursement/${res.id}`)
   } catch {

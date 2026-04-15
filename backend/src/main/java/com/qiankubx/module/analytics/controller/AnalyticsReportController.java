@@ -1,6 +1,7 @@
 package com.qiankubx.module.analytics.controller;
 
 import com.qiankubx.common.response.Result;
+import com.qiankubx.common.util.JwtUtil;
 import com.qiankubx.module.analytics.dto.ErrorReportDTO;
 import com.qiankubx.module.analytics.dto.EventReportDTO;
 import com.qiankubx.module.analytics.dto.PerformanceReportDTO;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AnalyticsReportController {
 
     private final EventCollectService eventCollectService;
+    private final JwtUtil jwtUtil;
 
     @PostMapping("/report")
     public Result<Void> reportEvents(HttpServletRequest request,
@@ -48,6 +50,13 @@ public class AnalyticsReportController {
         Object attr = request.getAttribute("userId");
         if (attr instanceof Long) {
             return (Long) attr;
+        }
+        try {
+            String token = request.getHeader("Authorization");
+            if (token != null && token.startsWith("Bearer ")) {
+                return jwtUtil.getUserId(token.substring(7));
+            }
+        } catch (Exception ignored) {
         }
         return 0L;
     }

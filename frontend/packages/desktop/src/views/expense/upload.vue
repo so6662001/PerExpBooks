@@ -103,6 +103,7 @@ import {
   type InvoiceUploadVO,
 } from '@qianku/shared'
 import { ElMessage, type UploadFile } from 'element-plus'
+import { Tracker } from '@qianku/shared/analytics'
 
 interface UploadResult {
   filename: string
@@ -133,6 +134,7 @@ async function startUpload() {
     if (!file.raw) continue
     try {
       const invoice = await uploadInvoice(file.raw)
+      try { Tracker.getInstance().track('invoice_upload_success', { parseSuccess: true }) } catch {}
       results.value.push({
         filename: file.name,
         success: true,
@@ -142,6 +144,7 @@ async function startUpload() {
         created: false,
       })
     } catch {
+      try { Tracker.getInstance().track('invoice_upload_fail', { errorType: 'upload_error' }) } catch {}
       results.value.push({
         filename: file.name,
         success: false,

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { showToast, showLoadingToast, closeToast } from 'vant'
 import { uploadInvoice, createExpense, listCategories, get } from '@qianku/shared'
 import type { InvoiceUploadVO } from '@qianku/shared'
+import { Tracker } from '@qianku/shared/analytics'
 
 const router = useRouter()
 const fileList = ref<any[]>([])
@@ -47,12 +48,14 @@ async function handleUpload(file: any) {
     const result = await uploadInvoice(file.file)
     invoiceResult.value = result
     step.value = 'confirm'
+    try { Tracker.getInstance().track('invoice_upload_success', { parseSuccess: result.parseSuccess }) } catch {}
     if (result.parseSuccess) {
       showToast({ message: '识别成功', type: 'success' })
     } else {
       showToast({ message: result.parseMessage || '请手动填写信息' })
     }
   } catch (e: any) {
+    try { Tracker.getInstance().track('invoice_upload_fail', { errorType: 'upload_error' }) } catch {}
     showToast(e.message || '上传失败')
   } finally {
     uploading.value = false

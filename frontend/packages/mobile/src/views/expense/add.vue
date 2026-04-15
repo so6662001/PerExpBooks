@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { createExpense, listTrips, listCategories } from '@qianku/shared'
 import type { TripVO } from '@qianku/shared'
+import { Tracker } from '@qianku/shared/analytics'
 
 defineOptions({ name: 'ExpenseAdd' })
 
@@ -102,6 +103,7 @@ async function handleSubmit() {
       tripId: form.value.tripId || undefined,
       description: form.value.description,
     })
+    try { Tracker.getInstance().track('expense_add_manual', { category: form.value.categoryId }) } catch {}
     showToast({ message: '添加成功', type: 'success' })
     router.back()
   } catch (e: any) {

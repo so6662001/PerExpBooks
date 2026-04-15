@@ -33,11 +33,12 @@ export class Reporter {
 
   addError(error: ErrorData): void {
     this.errorQueue.push(error)
-    this.flushImmediate(error, this.config.errorUrl)
+    this.flushImmediate(error)
   }
 
-  flushImmediate(data: any, url: string): void {
-    this.send(url, Array.isArray(data) ? data : [data])
+  flushImmediate(data: ErrorData): void {
+    const errors = Array.isArray(data) ? data : [data]
+    this.send(this.config.errorUrl, { errors })
   }
 
   private startTimer(): void {
@@ -50,17 +51,17 @@ export class Reporter {
 
   private flush(): void {
     if (this.eventQueue.length === 0) return
-    const batch = this.eventQueue.splice(0, this.config.batchSize)
-    this.send(this.config.reportUrl, batch)
+    const events = this.eventQueue.splice(0, this.config.batchSize)
+    this.send(this.config.reportUrl, { events })
   }
 
   private flushPerformance(): void {
     if (this.performanceQueue.length === 0) return
-    const batch = this.performanceQueue.splice(0, this.config.batchSize)
-    this.send(this.config.performanceUrl, batch)
+    const performances = this.performanceQueue.splice(0, this.config.batchSize)
+    this.send(this.config.performanceUrl, { performances })
   }
 
-  private async send(url: string, data: any[]): Promise<void> {
+  private async send(url: string, data: Record<string, any>): Promise<void> {
     try {
       const blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
       if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
@@ -72,7 +73,7 @@ export class Reporter {
         await this.fetchFallback(url, blob)
       }
     } catch {
-      this.cacheToLocal(data as EventData[])
+      this.cacheToLocal(data)
     }
   }
 
@@ -80,8 +81,10 @@ export class Reporter {
     await fetch(url, { method: 'POST', body: blob, keepalive: true })
   }
 
-  private cacheToLocal(events: EventData[]): void {
+  private cacheToLocal(data: Record<string, any>): void {
     try {
+      const events = data.events || []
+      if (events.length === 0) return
       const cached = localStorage.getItem(CACHE_KEY)
       let existing: EventData[] = cached ? JSON.parse(cached) : []
       existing = existing.concat(events)
@@ -101,7 +104,7 @@ export class Reporter {
       const events: EventData[] = JSON.parse(cached)
       if (events.length > 0) {
         localStorage.removeItem(CACHE_KEY)
-        this.send(this.config.reportUrl, events)
+        this.send(this.config.reportUrl, { events })
       }
     } catch {
       // localStorage unavailable
@@ -125,11 +128,11 @@ export class Reporter {
   private flushAll(): void {
     if (this.eventQueue.length > 0) {
       const events = this.eventQueue.splice(0)
-      this.send(this.config.reportUrl, events)
+      this.send(this.config.reportUrl, { events })
     }
     if (this.performanceQueue.length > 0) {
-      const perfs = this.performanceQueue.splice(0)
-      this.send(this.config.performanceUrl, perfs)
+      const performances = this.performanceQueue.splice(0)
+      this.send(this.config.performanceUrl, { performances })
     }
   }
 

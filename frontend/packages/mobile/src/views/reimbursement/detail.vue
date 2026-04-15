@@ -12,6 +12,7 @@ import {
   get,
 } from '@qianku/shared'
 import type { ReimbursementVO, ExportOptions } from '@qianku/shared'
+import { Tracker } from '@qianku/shared/analytics'
 
 const route = useRoute()
 const router = useRouter()
@@ -47,6 +48,11 @@ async function handleExport(type: ExportOptions['type']) {
     if (result.url) {
       window.open(result.url, '_blank')
     }
+    if (type === 'merged_pdf') {
+      try { Tracker.getInstance().track('reimburse_export_merged_pdf') } catch {}
+    } else if (type === 'zip') {
+      try { Tracker.getInstance().track('reimburse_export_zip') } catch {}
+    }
     showToast({ message: '导出成功', type: 'success' })
     detail.value = await getReimbursementDetail(detail.value.id)
   } catch (e: any) {
@@ -65,6 +71,7 @@ async function handleSendEmail() {
       email: emailInput.value,
       attachType: emailAttachType.value,
     })
+    try { Tracker.getInstance().track('reimburse_send_email') } catch {}
     showToast({ message: '已发送至邮箱', type: 'success' })
     showEmailDialog.value = false
   } catch (e: any) {
@@ -84,6 +91,7 @@ async function handleMarkReceived() {
     })
     await markReceived(detail.value.id)
     detail.value.reimburseStatus = 2
+    try { Tracker.getInstance().track('reimburse_confirm_received') } catch {}
     showToast({ message: '已标记收款', type: 'success' })
     try {
       const triggerResult = await get('/trigger/check', { params: { scene: 'REIMBURSEMENT_RECEIVED' } })

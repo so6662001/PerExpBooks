@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { getPlans, getMemberStatus, createMemberOrder, getAvailableCoupons, useUserStore, formatAmount } from '@qianku/shared'
 import type { PlanVO, MemberStatusVO, CouponVO, CreateOrderDTO } from '@qianku/shared'
+import { Tracker } from '@qianku/shared/analytics'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -48,6 +49,7 @@ const quota = computed(() => {
 })
 
 watch(selectedPlan, async (val) => {
+  try { Tracker.getInstance().track('member_plan_click', { planType: val }) } catch {}
   selectedCoupon.value = null
   try {
     coupons.value = await getAvailableCoupons({ planType: val })
@@ -96,6 +98,7 @@ async function handlePay() {
       data.teamMemberCount = teamMemberCount.value
     }
     await createMemberOrder(data)
+    try { Tracker.getInstance().track('member_pay_start', { planType: selectedPlan.value, payType: payType.value }) } catch {}
     showToast('订单创建成功')
     router.push('/member/orders')
   } catch (e: any) {

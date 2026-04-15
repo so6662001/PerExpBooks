@@ -113,6 +113,7 @@ export class Tracker {
       eventId: generateEventId(),
       eventType,
       eventName,
+      userId: this.userId,
       sessionId: this.sessionManager.getSessionId(),
       pagePath: typeof window !== 'undefined' ? window.location.pathname : '',
       pageTitle: typeof document !== 'undefined' ? document.title : '',

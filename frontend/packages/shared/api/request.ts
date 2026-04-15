@@ -1,5 +1,6 @@
-import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios'
+import axios, { type AxiosRequestConfig, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import type { Result } from '../types/common'
+import { Tracker } from '../analytics/tracker'
 
 const instance = axios.create({
   baseURL: '/api/v1',
@@ -21,13 +22,30 @@ instance.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    ;(config as any).__startTime = Date.now()
     return config
   },
   (error) => Promise.reject(error),
 )
 
+function reportApiPerformance(config: InternalAxiosRequestConfig | undefined, statusCode: number, durationMs: number) {
+  if (!config) return
+  try {
+    const tracker = Tracker.getInstance()
+    tracker.track('api_request', {
+      apiPath: config.url,
+      method: config.method?.toUpperCase(),
+      statusCode,
+      durationMs,
+      isTimeout: durationMs > 15000,
+    })
+  } catch {}
+}
+
 instance.interceptors.response.use(
   (response: AxiosResponse<Result>) => {
+    reportApiPerformance(response.config, response.status, Date.now() - ((response.config as any).__startTime || Date.now()))
+
     const { code, message, data } = response.data
 
     if (code === 4002) {
@@ -48,6 +66,9 @@ instance.interceptors.response.use(
     return data as any
   },
   (error) => {
+    if (error.response) {
+      reportApiPerformance(error.config, error.response.status, Date.now() - ((error.config as any)?.__startTime || Date.now()))
+    }
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
       window.location.href = '/auth/login'

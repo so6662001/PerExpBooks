@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@qianku/shared'
+import { Tracker } from '@qianku/shared/analytics'
 import AgreementPopup from './components/AgreementPopup.vue'
 
 const route = useRoute()
@@ -29,7 +30,10 @@ const showTabBar = computed(() => {
 
 function onTabChange(name: string | number) {
   const item = tabItems.find((t) => t.name === name)
-  if (item) router.push(item.path)
+  if (item) {
+    try { Tracker.getInstance().track('tab_switch', { toTab: String(name) }) } catch {}
+    router.push(item.path)
+  }
 }
 
 onMounted(() => {

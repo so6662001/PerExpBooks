@@ -14,6 +14,7 @@ import {
   copyToClipboard,
 } from '@qianku/shared'
 import type { DashboardVO, InviteCodeVO, InviteRecordVO } from '@qianku/shared'
+import { Tracker } from '@qianku/shared/analytics'
 
 const router = useRouter()
 const dashboard = ref<DashboardVO | null>(null)
@@ -49,6 +50,7 @@ async function copyInviteLink() {
   if (!codeInfo.value) return
   try {
     await copyToClipboard(codeInfo.value.inviteLink)
+    try { Tracker.getInstance().track('share_copy_text') } catch {}
     showToast({ message: '邀请链接已复制', type: 'success' })
   } catch {
     showToast('复制失败')
@@ -58,6 +60,7 @@ async function copyInviteLink() {
 async function generatePoster() {
   try {
     const result = await getPoster({ type: 'invite' })
+    try { Tracker.getInstance().track('share_poster_generate') } catch {}
     showToast({ message: '海报已生成', type: 'success' })
   } catch (e: any) {
     showToast(e.message || '生成失败')

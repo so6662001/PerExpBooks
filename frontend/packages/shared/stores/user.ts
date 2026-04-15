@@ -5,6 +5,7 @@ import type { MemberStatusVO } from '../types/member'
 
 import { getUserProfile } from '../api/user'
 import { getMemberStatus } from '../api/member'
+import { Tracker } from '../analytics/tracker'
 
 export const useUserStore = defineStore('user', () => {
   const token = ref(localStorage.getItem('token') || '')
@@ -26,6 +27,10 @@ export const useUserStore = defineStore('user', () => {
   async function fetchProfile() {
     try {
       userInfo.value = await getUserProfile()
+      try {
+        const tracker = Tracker.getInstance()
+        tracker.setUser(Number(userInfo.value!.id), String(userInfo.value!.memberType || 'free'))
+      } catch {}
     } catch (e) {
       console.error('Failed to fetch profile:', e)
     }

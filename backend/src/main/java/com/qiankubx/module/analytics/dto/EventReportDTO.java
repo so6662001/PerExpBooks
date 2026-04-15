@@ -23,6 +23,8 @@ public class EventReportDTO {
 
         private String eventName;
 
+        private Long userId;
+
         private String sessionId;
 
         private String pagePath;

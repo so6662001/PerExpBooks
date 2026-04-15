@@ -17,6 +17,7 @@ export interface EventData {
   eventId: string
   eventType: 'page_view' | 'click' | 'exposure' | 'custom'
   eventName: string
+  userId: number
   sessionId: string
   pagePath: string
   pageTitle: string

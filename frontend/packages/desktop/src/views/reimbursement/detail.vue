@@ -166,6 +166,7 @@ import {
   type ReimbursementVO,
 } from '@qianku/shared'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Tracker } from '@qianku/shared/analytics'
 
 const route = useRoute()
 const loading = ref(true)
@@ -220,6 +221,11 @@ async function handleExport(type: 'merged_pdf' | 'zip' | 'report_only') {
   try {
     const res = await exportReimbursement(detail.value.id, { type })
     if (res.url) window.open(res.url, '_blank')
+    if (type === 'merged_pdf') {
+      try { Tracker.getInstance().track('reimburse_export_merged_pdf') } catch {}
+    } else if (type === 'zip') {
+      try { Tracker.getInstance().track('reimburse_export_zip') } catch {}
+    }
     ElMessage.success('导出成功')
     loadData()
   } catch (e: any) {
@@ -234,6 +240,7 @@ async function handleSendEmail() {
       email: emailInput.value,
       attachType: emailAttachType.value,
     })
+    try { Tracker.getInstance().track('reimburse_send_email') } catch {}
     ElMessage.success('已发送至邮箱')
     showEmailDialog.value = false
     loadData()
@@ -247,6 +254,7 @@ async function handleReceived() {
   try {
     await ElMessageBox.confirm('确认已收到报销款项？', '提示')
     await markReceived(detail.value.id)
+    try { Tracker.getInstance().track('reimburse_confirm_received') } catch {}
     ElMessage.success('已确认收款')
     loadData()
   } catch {

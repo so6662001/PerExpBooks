@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { getPendingExpenses, createReimbursement, formatAmount, formatDate, get } from '@qianku/shared'
 import type { ExpenseVO } from '@qianku/shared'
+import { Tracker } from '@qianku/shared/analytics'
 
 const router = useRouter()
 const pendingExpenses = ref<ExpenseVO[]>([])
@@ -70,6 +71,7 @@ async function handleCreate() {
       remark: remark.value,
       expenseIds: selectedIds.value,
     })
+    try { Tracker.getInstance().track('reimburse_generate', { itemCount: selectedIds.value.length, totalAmount: totalAmount.value }) } catch {}
     showToast({ message: '报销单创建成功', type: 'success' })
     try {
       const triggerResult = await get('/trigger/check', { params: { scene: 'REIMBURSEMENT_CREATED' } })
