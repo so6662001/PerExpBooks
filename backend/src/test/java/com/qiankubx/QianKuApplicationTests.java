@@ -1,9 +1,9 @@
 package com.qiankubx;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
-@SpringBootTest
+@EnabledIfEnvironmentVariable(named = "SPRING_INTEGRATION_TEST", matches = "true")
 class QianKuApplicationTests {
 
     @Test

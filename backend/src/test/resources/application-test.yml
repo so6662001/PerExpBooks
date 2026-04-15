@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  rabbitmq:
+    host: localhost
+    port: 5672
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+
+qianku:
+  jwt:
+    secret: test-secret-key-for-unit-testing-at-least-32-chars
+    expire: 86400
+  security:
+    sign-key: test-sign-key-for-unit-testing-32
