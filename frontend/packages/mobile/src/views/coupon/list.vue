@@ -23,15 +23,15 @@ onMounted(async () => {
 })
 
 const availableCoupons = computed(() =>
-  coupons.value.filter(c => !c.used && new Date(c.expireAt) > new Date()),
+  coupons.value.filter(c => c.useStatus === 0 && new Date(c.expireAt) > new Date()),
 )
 
 const usedCoupons = computed(() =>
-  coupons.value.filter(c => c.used),
+  coupons.value.filter(c => c.useStatus === 1),
 )
 
 const expiredCoupons = computed(() =>
-  coupons.value.filter(c => !c.used && new Date(c.expireAt) <= new Date()),
+  coupons.value.filter(c => c.useStatus === 2 || (c.useStatus === 0 && new Date(c.expireAt) <= new Date())),
 )
 
 const currentList = computed(() => {
@@ -41,8 +41,8 @@ const currentList = computed(() => {
 })
 
 function getCouponValue(coupon: CouponVO) {
-  if (coupon.type === 'discount') return `${coupon.value}折`
-  return formatAmount(coupon.value)
+  if (coupon.type === 2) return `${coupon.discountValue}折`
+  return formatAmount(coupon.discountValue)
 }
 
 function getCouponCondition(coupon: CouponVO) {
@@ -80,7 +80,7 @@ function goUse() {
         </div>
         <div class="coupon-divider" />
         <div class="coupon-right">
-          <div class="coupon-code">{{ coupon.code }}</div>
+          <div class="coupon-code">{{ coupon.name }}</div>
           <div class="coupon-expire">有效期至 {{ formatDate(coupon.expireAt) }}</div>
           <van-button
             v-if="activeTab === 'available'"

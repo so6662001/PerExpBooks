@@ -10,7 +10,7 @@ export interface LoginVO {
   token: string
   isNew: boolean
   user: UserVO
-  memberStatus: MemberStatusVO | null
+  memberStatus: UserMemberStatusVO | null
   agreementCheck: AgreementCheckVO | null
 }
 
@@ -41,7 +41,7 @@ export interface UserUpdateDTO {
   defaultSubsidy?: number
 }
 
-export interface MemberStatusVO {
+export interface UserMemberStatusVO {
   memberType: number
   memberStatus: number
   memberExpireTime: string

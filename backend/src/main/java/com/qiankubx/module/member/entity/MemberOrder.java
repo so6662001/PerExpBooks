@@ -46,6 +46,9 @@ public class MemberOrder {
 
     private Long teamId;
 
+    /** 团队版成员数 */
+    private Integer teamMemberCount;
+
     /** 0否 1是 */
     private Integer isRenewal;
 

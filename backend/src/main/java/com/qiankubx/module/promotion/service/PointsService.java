@@ -5,22 +5,27 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.qiankubx.common.exception.BizException;
 import com.qiankubx.common.security.ChainHashService;
 import com.qiankubx.common.security.DataSignService;
+import com.qiankubx.module.coupon.service.CouponService;
 import com.qiankubx.module.promotion.dto.PointsLogVO;
 import com.qiankubx.module.promotion.entity.PointsLog;
 import com.qiankubx.module.promotion.entity.PromoterLevel;
 import com.qiankubx.module.promotion.mapper.PointsLogMapper;
 import com.qiankubx.module.promotion.mapper.PromoterLevelMapper;
+import com.qiankubx.module.user.entity.User;
+import com.qiankubx.module.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = {@Lazy})
 public class PointsService {
 
     private final PointsLogMapper pointsLogMapper;
@@ -28,6 +33,9 @@ public class PointsService {
     private final PromoterLevelService promoterLevelService;
     private final ChainHashService chainHashService;
     private final DataSignService dataSignService;
+    private final UserMapper userMapper;
+    @Lazy
+    private final CouponService couponService;
 
     @Transactional(rollbackFor = Exception.class)
     public void addPoints(Long userId, int points, String action, Long refId, String remark) {
@@ -117,6 +125,43 @@ public class PointsService {
         );
 
         log.info("积分兑换: userId={}, type={}, points={}, remark={}", userId, redeemType, -requiredPoints, remark);
+
+        User user = userMapper.selectById(userId);
+        switch (redeemType) {
+            case 1 -> {
+                if (user.getMemberExpireTime() != null && user.getMemberExpireTime().isAfter(LocalDateTime.now())) {
+                    user.setMemberExpireTime(user.getMemberExpireTime().plusDays(7));
+                } else {
+                    user.setMemberType(2);
+                    user.setMemberStatus(1);
+                    user.setMemberExpireTime(LocalDateTime.now().plusDays(7));
+                }
+                userMapper.updateById(user);
+            }
+            case 2 -> {
+                couponService.issueRedeemCoupon(userId, new BigDecimal("10"));
+            }
+            case 3 -> {
+                if (user.getMemberExpireTime() != null && user.getMemberExpireTime().isAfter(LocalDateTime.now())) {
+                    user.setMemberExpireTime(user.getMemberExpireTime().plusMonths(1));
+                } else {
+                    user.setMemberType(1);
+                    user.setMemberStatus(1);
+                    user.setMemberExpireTime(LocalDateTime.now().plusMonths(1));
+                }
+                userMapper.updateById(user);
+            }
+            case 4 -> {
+                if (user.getMemberExpireTime() != null && user.getMemberExpireTime().isAfter(LocalDateTime.now())) {
+                    user.setMemberExpireTime(user.getMemberExpireTime().plusYears(1));
+                } else {
+                    user.setMemberType(2);
+                    user.setMemberStatus(1);
+                    user.setMemberExpireTime(LocalDateTime.now().plusYears(1));
+                }
+                userMapper.updateById(user);
+            }
+        }
     }
 
     public List<PointsLogVO> getPointsLog(Long userId) {

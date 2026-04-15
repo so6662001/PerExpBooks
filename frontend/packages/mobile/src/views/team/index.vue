@@ -52,20 +52,18 @@ async function handleCreateTeam() {
   }
 }
 
-function getRoleLabel(role: string) {
-  const map: Record<string, string> = {
-    owner: '创建者',
-    admin: '管理员',
-    member: '成员',
+function getRoleLabel(role: number) {
+  const map: Record<number, string> = {
+    1: '管理员',
+    2: '成员',
   }
-  return map[role] || role
+  return map[role] || '成员'
 }
 
-function getRoleColor(role: string) {
-  const map: Record<string, string> = {
-    owner: '#FF9500',
-    admin: '#007AFF',
-    member: '#34C759',
+function getRoleColor(role: number) {
+  const map: Record<number, string> = {
+    1: '#FF9500',
+    2: '#34C759',
   }
   return map[role] || '#999'
 }
@@ -120,7 +118,7 @@ async function handleRemoveMember(member: TeamMemberVO) {
           <div class="team-icon">👥</div>
           <div class="team-detail">
             <div class="team-name">{{ team.name }}</div>
-            <div class="team-meta">{{ team.memberCount }} 位成员 · {{ team.planName }}</div>
+            <div class="team-meta">{{ team.memberCount }} 位成员</div>
           </div>
         </div>
       </div>
@@ -139,7 +137,7 @@ async function handleRemoveMember(member: TeamMemberVO) {
             round
             width="40"
             height="40"
-            :src="member.avatar"
+            :src="member.avatarUrl"
             fit="cover"
           >
             <template #error>
@@ -153,7 +151,7 @@ async function handleRemoveMember(member: TeamMemberVO) {
             </span>
           </div>
           <van-icon
-            v-if="member.role === 'member'"
+            v-if="member.role === 2"
             name="delete-o"
             size="20"
             color="#FF3B30"

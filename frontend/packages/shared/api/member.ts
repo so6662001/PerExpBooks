@@ -1,15 +1,23 @@
 import { get, post } from './request'
-import type { MemberStatusVO } from '../types/user'
-import type { MemberPlanVO, MemberOrderDTO, MemberOrderVO } from '../types/member'
+import type { PlanVO, OrderVO, CreateOrderDTO, MemberStatusVO } from '../types/member'
+
+export const getPlans = () =>
+  get<PlanVO[]>('/member/plans')
 
 export const getMemberStatus = () =>
   get<MemberStatusVO>('/member/status')
 
-export const getMemberPlans = () =>
-  get<MemberPlanVO[]>('/member/plans')
+export const createMemberOrder = (data: CreateOrderDTO) =>
+  post<OrderVO>('/member/create-order', data)
 
-export const createMemberOrder = (data: MemberOrderDTO) =>
-  post<MemberOrderVO>('/member/create-order', data)
+export const listOrders = () =>
+  get<OrderVO[]>('/member/orders')
 
-export const checkPaymentStatus = (orderId: string) =>
-  get<{ paid: boolean }>(`/member/order/${orderId}/status`)
+export const getOrderDetail = (orderNo: string) =>
+  get<OrderVO>('/member/order/' + orderNo)
+
+export const applyRefund = (orderNo: string) =>
+  post('/member/refund/' + orderNo)
+
+// Keep old function names as aliases for backward compatibility
+export const getMemberPlans = getPlans

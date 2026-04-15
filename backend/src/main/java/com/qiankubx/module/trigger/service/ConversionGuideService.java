@@ -98,4 +98,49 @@ public class ConversionGuideService {
 
         return result;
     }
+
+    public Map<String, Object> checkSceneTrigger(Long userId, String scene) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("triggered", false);
+        result.put("scene", scene);
+
+        switch (scene) {
+            case "watermark_hint" -> {
+                result.put("triggered", true);
+                result.put("type", "watermark_hint");
+                result.put("title", "升级去水印");
+                result.put("message", "升级会员，导出无水印专业报销单");
+                result.put("buttonText", "查看会员");
+                result.put("targetType", "member");
+            }
+            case "stats_blocked" -> {
+                result.put("triggered", true);
+                result.put("type", "stats_blocked");
+                result.put("title", "功能受限");
+                result.put("message", "升级解锁全部统计报表，掌控每一笔支出");
+                result.put("buttonText", "立即升级");
+                result.put("targetType", "member");
+            }
+            case "expired_recall" -> {
+                User user = userMapper.selectById(userId);
+                if (user != null && user.getMemberExpireTime() != null
+                        && user.getMemberExpireTime().plusDays(7).isBefore(LocalDateTime.now())
+                        && (user.getMemberStatus() == null || user.getMemberStatus() == 0)) {
+                    Long pending = jdbcTemplate.queryForObject(
+                            "SELECT COUNT(*) FROM t_expense WHERE user_id = ? AND status = 0 AND reimburse_status = 0",
+                            Long.class, userId);
+                    long pendingCount = pending != null ? pending : 0;
+                    result.put("triggered", true);
+                    result.put("type", "expired_recall");
+                    result.put("title", "会员已过期");
+                    result.put("message", "您有" + pendingCount + "笔费用待报销，续费后继续管理");
+                    result.put("buttonText", "立即续费");
+                    result.put("targetType", "member");
+                }
+            }
+            default -> log.debug("未知转化场景: {}", scene);
+        }
+
+        return result;
+    }
 }

@@ -8,18 +8,18 @@
       <div class="current-status">
         <div class="status-info">
           <h3>
-            {{ memberStatus.isMember ? memberStatus.level + ' 会员' : '免费版' }}
+            {{ memberStatus.memberStatus === 1 ? '会员' : '免费版' }}
           </h3>
-          <p v-if="memberStatus.isMember">
-            到期时间：{{ memberStatus.expireAt }} (剩余 {{ memberStatus.remainingDays }} 天)
+          <p v-if="memberStatus.memberStatus === 1">
+            到期时间：{{ memberStatus.expireTime }} (剩余 {{ memberStatus.daysLeft }} 天)
           </p>
           <p v-else>升级会员解锁更多功能</p>
         </div>
-        <div class="quota-info" v-if="memberStatus.isMember">
-          <span>本月额度：{{ memberStatus.usedQuota }} / {{ memberStatus.monthlyQuota }}</span>
+        <div class="quota-info" v-if="memberStatus.quotaInfo">
+          <span>发票额度：{{ memberStatus.quotaInfo.monthlyInvoiceUsed }} / {{ memberStatus.quotaInfo.monthlyInvoiceLimit }}</span>
           <el-progress
-            :percentage="Math.round((memberStatus.usedQuota / memberStatus.monthlyQuota) * 100)"
-            :color="memberStatus.usedQuota > memberStatus.monthlyQuota * 0.8 ? '#FF9500' : '#007AFF'"
+            :percentage="memberStatus.quotaInfo.monthlyInvoiceLimit > 0 ? Math.round((memberStatus.quotaInfo.monthlyInvoiceUsed / memberStatus.quotaInfo.monthlyInvoiceLimit) * 100) : 0"
+            :color="memberStatus.quotaInfo.monthlyInvoiceUsed > memberStatus.quotaInfo.monthlyInvoiceLimit * 0.8 ? '#FF9500' : '#007AFF'"
           />
         </div>
       </div>
@@ -27,7 +27,7 @@
 
     <h3 class="section-title">选择套餐</h3>
     <el-row :gutter="16">
-      <el-col :span="8" v-for="plan in plans" :key="plan.id">
+      <el-col :span="8" v-for="plan in plans" :key="plan.planType">
         <el-card
           :class="['plan-card', { recommended: plan.recommended }]"
           shadow="hover"
@@ -36,7 +36,6 @@
           <h3 class="plan-name">{{ plan.name }}</h3>
           <div class="plan-price">
             <span class="price">¥{{ plan.price }}</span>
-            <span class="unit">/{{ plan.durationUnit === 'month' ? '月' : '年' }}</span>
           </div>
           <div v-if="plan.originalPrice > plan.price" class="original-price">
             原价 ¥{{ plan.originalPrice }}
@@ -47,13 +46,12 @@
               {{ feature }}
             </li>
           </ul>
-          <div class="plan-quota">每月 {{ plan.monthlyQuota }} 次发票识别</div>
           <el-button
             :type="plan.recommended ? 'primary' : 'default'"
             style="width: 100%"
             @click="handleSubscribe(plan)"
           >
-            {{ memberStatus?.isMember ? '续费/升级' : '立即开通' }}
+            {{ memberStatus?.memberStatus === 1 ? '续费/升级' : '立即开通' }}
           </el-button>
         </el-card>
       </el-col>
@@ -65,37 +63,38 @@
 import { ref, onMounted } from 'vue'
 import {
   useUserStore,
-  getMemberPlans,
+  getPlans,
+  getMemberStatus,
   createMemberOrder,
-  type MemberPlanVO,
+  type PlanVO,
   type MemberStatusVO,
 } from '@qianku/shared'
 import { ElMessage } from 'element-plus'
 
 const userStore = useUserStore()
 const memberStatus = ref<MemberStatusVO | null>(null)
-const plans = ref<MemberPlanVO[]>([])
+const plans = ref<PlanVO[]>([])
 
 async function loadData() {
   try {
-    await userStore.fetchMemberStatus()
-    memberStatus.value = userStore.memberStatus
-    plans.value = await getMemberPlans()
+    const [statusData, plansData] = await Promise.all([
+      getMemberStatus(),
+      getPlans(),
+    ])
+    memberStatus.value = statusData
+    plans.value = plansData
   } catch {
     // silent
   }
 }
 
-async function handleSubscribe(plan: MemberPlanVO) {
+async function handleSubscribe(plan: PlanVO) {
   try {
-    const order = await createMemberOrder({
-      planId: plan.id,
-      paymentMethod: 'wechat',
+    await createMemberOrder({
+      planType: plan.planType,
+      payType: 1,
     })
-    if (order.paymentUrl) {
-      window.open(order.paymentUrl, '_blank')
-    }
-    ElMessage.info('请在弹出的页面中完成支付')
+    ElMessage.success('订单创建成功')
   } catch {
     ElMessage.error('创建订单失败')
   }

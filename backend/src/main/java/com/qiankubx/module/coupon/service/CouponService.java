@@ -164,6 +164,38 @@ public class CouponService {
         log.info("邀请优惠券发放成功: userId={}, count={}", userId, templates.size());
     }
 
+    @Transactional(rollbackFor = Exception.class)
+    public void issueRedeemCoupon(Long userId, BigDecimal amount) {
+        UserCoupon coupon = new UserCoupon();
+        coupon.setUserId(userId);
+        coupon.setName("积分兑换¥" + amount.stripTrailingZeros().toPlainString() + "优惠券");
+        coupon.setType(3);
+        coupon.setDiscountValue(amount);
+        coupon.setMinAmount(BigDecimal.ZERO);
+        coupon.setApplicablePlanType(0);
+        coupon.setUseStatus(0);
+        coupon.setExpireAt(LocalDateTime.now().plusDays(30));
+        coupon.setCreatedAt(LocalDateTime.now());
+        userCouponMapper.insert(coupon);
+        log.info("积分兑换优惠券发放: userId={}, amount={}", userId, amount);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void issueRecallCoupon(Long userId) {
+        UserCoupon coupon = new UserCoupon();
+        coupon.setUserId(userId);
+        coupon.setName("会员唤回¥20优惠券");
+        coupon.setType(3);
+        coupon.setDiscountValue(new BigDecimal("20"));
+        coupon.setMinAmount(BigDecimal.ZERO);
+        coupon.setApplicablePlanType(0);
+        coupon.setUseStatus(0);
+        coupon.setExpireAt(LocalDateTime.now().plusDays(7));
+        coupon.setCreatedAt(LocalDateTime.now());
+        userCouponMapper.insert(coupon);
+        log.info("会员唤回优惠券发放: userId={}", userId);
+    }
+
     private void issueCouponFromTemplate(Long userId, CouponTemplate template) {
         UserCoupon coupon = new UserCoupon();
         coupon.setUserId(userId);

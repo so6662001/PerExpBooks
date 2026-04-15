@@ -1,36 +1,67 @@
-export interface MemberPlanVO {
-  id: string
+export interface PlanVO {
+  planType: number
   name: string
-  level: string
   price: number
   originalPrice: number
-  duration: number
-  durationUnit: 'month' | 'year'
   features: string[]
-  monthlyQuota: number
   recommended: boolean
 }
 
-export interface MemberOrderDTO {
-  planId: string
-  couponId?: string
-  paymentMethod: string
+export interface MemberStatusVO {
+  memberType: number
+  memberStatus: number
+  expireTime: string
+  daysLeft: number
+  quotaInfo: QuotaInfo
 }
 
-export interface MemberOrderVO {
-  orderId: string
+export interface QuotaInfo {
+  monthlyInvoiceUsed: number
+  monthlyInvoiceLimit: number
+  monthlyReimburseUsed: number
+  monthlyReimburseLimit: number
+}
+
+export interface CreateOrderDTO {
+  planType: number
+  payType: number
+  couponId?: number
+  teamMemberCount?: number
+}
+
+export interface OrderVO {
+  id: number
+  orderNo: string
+  planType: number
   planName: string
-  amount: number
-  paymentUrl: string
-  expireAt: string
+  originalAmount: number
+  discountAmount: number
+  payAmount: number
+  payType: number
+  payStatus: number
+  payTime: string
+  tradeNo: string
+  memberStart: string
+  memberEnd: string
+  isRenewal: number
+  refundStatus: number
+  createdAt: string
 }
 
 export interface CouponVO {
-  id: string
-  code: string
-  type: 'discount' | 'amount'
-  value: number
+  id: number
+  name: string
+  type: number
+  typeName: string
+  discountValue: number
   minAmount: number
+  applicablePlanType: number
+  useStatus: number
   expireAt: string
-  used: boolean
+  createdAt: string
 }
+
+// Keep old types as aliases for backward compatibility
+export type MemberPlanVO = PlanVO
+export type MemberOrderDTO = CreateOrderDTO
+export type MemberOrderVO = OrderVO

@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { UserVO, MemberStatusVO } from '../types/user'
+import type { UserVO } from '../types/user'
+import type { MemberStatusVO } from '../types/member'
+
 import { getUserProfile } from '../api/user'
 import { getMemberStatus } from '../api/member'
 

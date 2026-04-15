@@ -10,6 +10,10 @@ import com.qiankubx.module.member.dto.*;
 import com.qiankubx.module.member.entity.MemberOrder;
 import com.qiankubx.module.member.mapper.MemberOrderMapper;
 import com.qiankubx.module.promotion.service.CommissionService;
+import com.qiankubx.module.team.entity.Team;
+import com.qiankubx.module.team.entity.TeamMember;
+import com.qiankubx.module.team.mapper.TeamMapper;
+import com.qiankubx.module.team.mapper.TeamMemberMapper;
 import com.qiankubx.module.user.entity.User;
 import com.qiankubx.module.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +27,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Slf4j
@@ -37,6 +42,10 @@ public class MemberService {
     private final CouponService couponService;
     @Lazy
     private final CommissionService commissionService;
+    @Lazy
+    private final TeamMapper teamMapper;
+    @Lazy
+    private final TeamMemberMapper teamMemberMapper;
 
     private static final BigDecimal MONTHLY_PRICE = new BigDecimal("12");
     private static final BigDecimal YEARLY_PRICE = new BigDecimal("99");
@@ -107,6 +116,12 @@ public class MemberService {
 
     @Transactional(rollbackFor = Exception.class)
     public OrderVO createOrder(Long userId, CreateOrderDTO dto) {
+        if (dto.getPlanType() == 3) {
+            if (dto.getTeamMemberCount() == null || dto.getTeamMemberCount() < 5) {
+                throw new BizException(400, "团队版最少5人起购");
+            }
+        }
+
         BigDecimal originalAmount = getPlanPrice(dto.getPlanType());
         if (dto.getPlanType() == 3 && dto.getTeamMemberCount() != null && dto.getTeamMemberCount() > 1) {
             originalAmount = TEAM_PRICE.multiply(BigDecimal.valueOf(dto.getTeamMemberCount()));
@@ -137,6 +152,7 @@ public class MemberService {
         order.setPayStatus(0);
         order.setIsRenewal(isRenewal ? 1 : 0);
         order.setRefundStatus(0);
+        order.setTeamMemberCount(dto.getTeamMemberCount());
         order.setCreatedAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
 
@@ -144,10 +160,6 @@ public class MemberService {
         order.setDataSign(dataSignService.sign(signPayload));
 
         memberOrderMapper.insert(order);
-
-        if (dto.getCouponId() != null) {
-            couponService.useCoupon(userId, dto.getCouponId(), order.getId());
-        }
 
         return toOrderVO(order);
     }
@@ -191,6 +203,43 @@ public class MemberService {
         order.setMemberStart(memberStart);
         order.setMemberEnd(memberEnd);
 
+        if (order.getCouponId() != null) {
+            try {
+                couponService.useCoupon(order.getUserId(), order.getCouponId(), order.getId());
+            } catch (Exception e) {
+                log.error("支付成功后扣减优惠券失败: orderId={}, couponId={}", order.getId(), order.getCouponId(), e);
+            }
+        }
+
+        if (order.getPlanType() == 3) {
+            Team team = teamMapper.selectOne(new LambdaQueryWrapper<Team>()
+                    .eq(Team::getOwnerId, user.getId())
+                    .eq(Team::getStatus, 0));
+            if (team == null) {
+                team = new Team();
+                team.setName(user.getNickname() + "的团队");
+                team.setOwnerId(user.getId());
+                team.setInviteCode(generateTeamInviteCode());
+                team.setMaxMember(order.getTeamMemberCount() != null ? order.getTeamMemberCount() : 5);
+                team.setMemberCount(1);
+                team.setStatus(0);
+                team.setCreatedAt(now);
+                team.setUpdatedAt(now);
+                teamMapper.insert(team);
+
+                TeamMember member = new TeamMember();
+                member.setTeamId(team.getId());
+                member.setUserId(user.getId());
+                member.setRole(1);
+                member.setJoinedAt(now);
+                member.setStatus(0);
+                member.setCreatedAt(now);
+                teamMemberMapper.insert(member);
+            }
+            user.setTeamId(team.getId());
+            order.setTeamId(team.getId());
+        }
+
         String signPayload = buildSignPayload(order);
         order.setDataSign(dataSignService.sign(signPayload));
 
@@ -201,6 +250,7 @@ public class MemberService {
                 .set(User::getMemberType, order.getPlanType())
                 .set(User::getMemberStatus, 1)
                 .set(User::getMemberExpireTime, memberEnd)
+                .set(order.getPlanType() == 3, User::getTeamId, order.getTeamId())
                 .set(User::getUpdatedAt, now)
         );
 
@@ -255,9 +305,13 @@ public class MemberService {
             throw new BizException(400, "已超过7天退款期限");
         }
 
+        order.setPayStatus(2);
         order.setRefundStatus(2);
         order.setRefundTime(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
+
+        String signPayload = buildSignPayload(order);
+        order.setDataSign(dataSignService.sign(signPayload));
         memberOrderMapper.updateById(order);
 
         userMapper.update(null, new LambdaUpdateWrapper<User>()
@@ -290,6 +344,10 @@ public class MemberService {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         int random = ThreadLocalRandom.current().nextInt(1000, 10000);
         return "MB" + timestamp + random;
+    }
+
+    private String generateTeamInviteCode() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
     }
 
     private String buildSignPayload(MemberOrder order) {

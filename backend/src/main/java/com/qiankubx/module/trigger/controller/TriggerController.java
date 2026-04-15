@@ -32,4 +32,10 @@ public class TriggerController {
         Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
         return Result.ok(conversionGuideService.checkConversion(userId));
     }
+
+    @GetMapping("/conversion/scene")
+    public Result<Map<String, Object>> conversionScene(HttpServletRequest request, @RequestParam String scene) {
+        Long userId = (Long) request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        return Result.ok(conversionGuideService.checkSceneTrigger(userId, scene));
+    }
 }

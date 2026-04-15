@@ -1,36 +1,51 @@
-import { get, post, put, del } from './request'
+import { get, post, del } from './request'
 
 export interface TeamVO {
-  id: string
+  id: number
   name: string
-  ownerId: string
+  ownerId: number
+  ownerNickname: string
+  inviteCode: string
   memberCount: number
-  planName: string
+  maxMember: number
+  myRole: number
   createdAt: string
 }
 
 export interface TeamMemberVO {
-  userId: string
+  userId: number
   nickname: string
-  avatar: string
-  role: 'owner' | 'admin' | 'member'
+  avatarUrl: string
+  role: number
   joinedAt: string
 }
 
-export const getMyTeam = () =>
-  get<TeamVO>('/team')
-
 export const createTeam = (data: { name: string }) =>
-  post<TeamVO>('/team', data)
+  post<TeamVO>('/team/create', data)
 
-export const updateTeam = (data: { name: string }) =>
-  put<TeamVO>('/team', data)
+export const getTeamInfo = () =>
+  get<TeamVO>('/team/info')
 
-export const getTeamMembers = () =>
+export const generateInviteLink = () =>
+  post<{ inviteCode: string; inviteLink: string }>('/team/invite')
+
+export const joinTeam = (data: { inviteCode: string }) =>
+  post('/team/join', data)
+
+export const removeMember = (userId: number) =>
+  del('/team/member/' + userId)
+
+export const listMembers = () =>
   get<TeamMemberVO[]>('/team/members')
 
+export const getTeamStats = () =>
+  get<Record<string, any>>('/team/stats')
+
+// Backward-compatible aliases
+export const getMyTeam = getTeamInfo
+export const getTeamMembers = listMembers
+export const removeTeamMember = removeMember
 export const inviteTeamMember = (data: { phone: string; role: string }) =>
   post('/team/invite', data)
-
-export const removeTeamMember = (userId: string) =>
-  del(`/team/members/${userId}`)
+export const updateTeam = (data: { name: string }) =>
+  post('/team/create', data)
