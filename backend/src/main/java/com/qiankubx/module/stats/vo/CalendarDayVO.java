@@ -5,11 +5,11 @@ import lombok.Data;
 import java.math.BigDecimal;
 
 @Data
-public class MonthlyTrendVO {
+public class CalendarDayVO {
 
-    private String month;
+    private String date;
 
     private BigDecimal amount;
 
-    private BigDecimal reimbursed;
+    private Integer count;
 }

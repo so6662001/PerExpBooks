@@ -2,15 +2,15 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { getCategoryStats, formatAmount, getCategoryLabel } from '@qianku/shared'
-import type { CategoryStatsVO } from '@qianku/shared'
+import { getCategoryRatio, formatAmount } from '@qianku/shared'
+import type { CategoryRatioVO } from '@qianku/shared'
 import * as echarts from 'echarts'
 
 defineOptions({ name: 'StatsCategory' })
 
 const router = useRouter()
 const loading = ref(true)
-const categoryData = ref<CategoryStatsVO[]>([])
+const categoryData = ref<CategoryRatioVO[]>([])
 const chartRef = ref<HTMLElement>()
 let chart: echarts.ECharts | null = null
 
@@ -35,7 +35,7 @@ async function loadData() {
     const params: any = {}
     if (startDate.value) params.startDate = startDate.value
     if (endDate.value) params.endDate = endDate.value
-    categoryData.value = await getCategoryStats(params)
+    categoryData.value = await getCategoryRatio(params)
     await nextTick()
     renderChart()
   } catch (e: any) {
@@ -62,7 +62,7 @@ function renderChart() {
       itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
       label: { show: true, fontSize: 12 },
       data: categoryData.value.map((d, i) => ({
-        name: getCategoryLabel(d.category),
+        name: d.categoryName,
         value: d.amount,
         itemStyle: { color: colors[i % colors.length] },
       })),
@@ -116,15 +116,14 @@ function onEndDateConfirm({ selectedValues }: any) {
 
       <div class="section-title">分类明细</div>
       <div class="category-list">
-        <div v-for="(item, index) in categoryData" :key="item.category" class="category-item card">
+        <div v-for="(item, index) in categoryData" :key="item.categoryId" class="category-item card">
           <div class="category-dot" :style="{ background: colors[index % colors.length] }" />
           <div class="category-info">
-            <div class="category-name">{{ getCategoryLabel(item.category) }}</div>
-            <div class="category-count">{{ item.count }} 笔</div>
+            <div class="category-name">{{ item.categoryName }}</div>
           </div>
           <div class="category-right">
             <div class="category-amount">{{ formatAmount(item.amount) }}</div>
-            <div class="category-percent">{{ item.percentage.toFixed(1) }}%</div>
+            <div class="category-percent">{{ item.ratio.toFixed(1) }}%</div>
           </div>
         </div>
       </div>
@@ -189,12 +188,6 @@ function onEndDateConfirm({ selectedValues }: any) {
       .category-name {
         font-size: 15px;
         font-weight: 500;
-      }
-
-      .category-count {
-        font-size: 12px;
-        color: var(--color-text-secondary);
-        margin-top: 2px;
       }
     }
 

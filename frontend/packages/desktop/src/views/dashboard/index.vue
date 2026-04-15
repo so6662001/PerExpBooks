@@ -72,21 +72,21 @@ import * as echarts from 'echarts'
 import {
   getStatsOverview,
   getMonthlyTrend,
-  getCategoryStats,
+  getCategoryRatio,
   getRecentExpenses,
   formatAmount,
   getCategoryLabel,
   getStatusLabel,
   type StatsOverviewVO,
   type MonthlyTrendVO,
-  type CategoryStatsVO,
+  type CategoryRatioVO,
   type ExpenseVO,
 } from '@qianku/shared'
 
 const selectedYear = ref(String(new Date().getFullYear()))
 const overview = ref<StatsOverviewVO | null>(null)
 const monthlyData = ref<MonthlyTrendVO[]>([])
-const categoryData = ref<CategoryStatsVO[]>([])
+const categoryData = ref<CategoryRatioVO[]>([])
 const pendingExpenses = ref<ExpenseVO[]>([])
 
 const trendChartRef = ref<HTMLElement>()
@@ -96,9 +96,9 @@ let categoryChart: echarts.ECharts | null = null
 
 const statCards = computed(() => [
   { label: '总支出', value: formatAmount(overview.value?.totalExpense || 0), color: '#1d1d1f', prefix: '' },
-  { label: '已报销', value: formatAmount(overview.value?.reimbursedAmount || 0), color: '#34C759', prefix: '' },
-  { label: '待报销', value: formatAmount(overview.value?.pendingAmount || 0), color: '#FF9500', prefix: '' },
-  { label: '出差天数', value: overview.value?.tripDays || 0, color: '#007AFF', prefix: '' },
+  { label: '已报销', value: formatAmount(overview.value?.totalReimbursed || 0), color: '#34C759', prefix: '' },
+  { label: '待报销', value: formatAmount(overview.value?.totalPending || 0), color: '#FF9500', prefix: '' },
+  { label: '出差天数', value: overview.value?.totalTripDays || 0, color: '#007AFF', prefix: '' },
   { label: '出差次数', value: overview.value?.tripCount || 0, color: '#5856D6', prefix: '' },
   { label: '发票数', value: overview.value?.invoiceCount || 0, color: '#FF3B30', prefix: '' },
 ])
@@ -109,7 +109,7 @@ async function loadData() {
     const [overviewRes, trendRes, categoryRes, recentRes] = await Promise.allSettled([
       getStatsOverview({ year }),
       getMonthlyTrend({ year }),
-      getCategoryStats({ year }),
+      getCategoryRatio(),
       getRecentExpenses(10),
     ])
     if (overviewRes.status === 'fulfilled') overview.value = overviewRes.value
@@ -143,7 +143,7 @@ function renderTrendChart() {
         name: '支出',
         type: 'line',
         smooth: true,
-        data: monthlyData.value.map(m => m.expense),
+        data: monthlyData.value.map(m => m.amount),
         itemStyle: { color: '#007AFF' },
         areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
           { offset: 0, color: 'rgba(0,122,255,0.15)' },
@@ -184,7 +184,7 @@ function renderCategoryChart() {
       avoidLabelOverlap: true,
       label: { show: true, formatter: '{b}\n{d}%' },
       data: categoryData.value.map((c, i) => ({
-        name: getCategoryLabel(c.category),
+        name: c.categoryName,
         value: c.amount,
         itemStyle: { color: colors[i % colors.length] },
       })),

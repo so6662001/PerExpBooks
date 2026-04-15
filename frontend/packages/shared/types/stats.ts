@@ -1,28 +1,53 @@
 export interface StatsOverviewVO {
   totalExpense: number
-  reimbursedAmount: number
-  pendingAmount: number
-  tripDays: number
+  totalReimbursed: number
+  totalPending: number
+  totalTripDays: number
   tripCount: number
   invoiceCount: number
 }
 
 export interface MonthlyTrendVO {
   month: string
-  expense: number
+  amount: number
   reimbursed: number
 }
 
-export interface CategoryStatsVO {
-  category: string
+export interface CategoryRatioVO {
+  categoryId: number
+  categoryName: string
   amount: number
-  count: number
-  percentage: number
+  ratio: number
 }
 
-export interface StatsQueryDTO {
-  year?: number
-  month?: number
-  startDate?: string
-  endDate?: string
+export interface TripSummaryVO {
+  tripCount: number
+  totalDays: number
+  totalSubsidy: number
+  cityDistribution: CityStats[]
+}
+
+export interface CityStats {
+  city: string
+  count: number
+  amount: number
+}
+
+export interface ReimburseProgressVO {
+  month: string
+  submitted: number
+  received: number
+  pending: number
+}
+
+export interface YearlyCompareVO {
+  month: string
+  currentYear: number
+  lastYear: number
+}
+
+export interface CalendarDayVO {
+  date: string
+  amount: number
+  count: number
 }

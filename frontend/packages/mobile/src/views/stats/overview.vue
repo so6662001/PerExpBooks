@@ -1,21 +1,21 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { getStatsOverview, getMonthlyTrend, getCategoryStats, formatAmount } from '@qianku/shared'
-import type { StatsOverviewVO, MonthlyTrendVO, CategoryStatsVO } from '@qianku/shared'
+import { getStatsOverview, getMonthlyTrend, getCategoryRatio, formatAmount } from '@qianku/shared'
+import type { StatsOverviewVO, MonthlyTrendVO, CategoryRatioVO } from '@qianku/shared'
 import * as echarts from 'echarts'
 
 const router = useRouter()
 const overview = ref<StatsOverviewVO>({
   totalExpense: 0,
-  reimbursedAmount: 0,
-  pendingAmount: 0,
-  tripDays: 0,
+  totalReimbursed: 0,
+  totalPending: 0,
+  totalTripDays: 0,
   tripCount: 0,
   invoiceCount: 0,
 })
 const trendData = ref<MonthlyTrendVO[]>([])
-const categoryData = ref<CategoryStatsVO[]>([])
+const categoryData = ref<CategoryRatioVO[]>([])
 const loading = ref(true)
 
 const trendChartRef = ref<HTMLElement>()
@@ -25,19 +25,30 @@ let categoryChart: echarts.ECharts | null = null
 
 const statCards = [
   { key: 'totalExpense', label: '总支出', icon: '💰', format: true },
-  { key: 'reimbursedAmount', label: '已报销', icon: '✅', format: true },
-  { key: 'pendingAmount', label: '待报销', icon: '⏳', format: true },
-  { key: 'tripDays', label: '出差天数', icon: '📅', format: false },
+  { key: 'totalReimbursed', label: '已报销', icon: '✅', format: true },
+  { key: 'totalPending', label: '待报销', icon: '⏳', format: true },
+  { key: 'totalTripDays', label: '出差天数', icon: '📅', format: false },
   { key: 'tripCount', label: '出差次数', icon: '✈️', format: false },
   { key: 'invoiceCount', label: '发票数', icon: '📄', format: false },
 ]
 
+const reportLinks = [
+  { label: '月度趋势', path: '/stats/monthly', icon: '📈' },
+  { label: '分类分析', path: '/stats/category', icon: '📊' },
+  { label: '出差统计', path: '/stats/trip', icon: '✈️' },
+  { label: '报销进度', path: '/stats/progress', icon: '📋' },
+  { label: '年度对比', path: '/stats/yearly', icon: '📅' },
+  { label: '城市排行', path: '/stats/city', icon: '🏙️' },
+  { label: '费用日历', path: '/stats/calendar', icon: '🗓️' },
+]
+
 onMounted(async () => {
   try {
+    const currentYear = new Date().getFullYear()
     const [overviewData, trend, category] = await Promise.all([
       getStatsOverview(),
-      getMonthlyTrend(),
-      getCategoryStats(),
+      getMonthlyTrend({ year: currentYear }),
+      getCategoryRatio(),
     ])
     overview.value = overviewData
     trendData.value = trend
@@ -76,7 +87,7 @@ function renderTrendChart() {
       {
         name: '支出',
         type: 'line',
-        data: trendData.value.map((d) => d.expense),
+        data: trendData.value.map((d) => d.amount),
         smooth: true,
         lineStyle: { color: '#007AFF', width: 2 },
         itemStyle: { color: '#007AFF' },
@@ -115,7 +126,7 @@ function renderCategoryChart() {
       itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
       label: { show: true, fontSize: 12 },
       data: categoryData.value.map((d, i) => ({
-        name: d.category,
+        name: d.categoryName,
         value: d.amount,
         itemStyle: { color: colors[i % colors.length] },
       })),
@@ -146,6 +157,22 @@ function renderCategoryChart() {
     <div class="chart-section card">
       <h3 class="chart-title">分类占比</h3>
       <div ref="categoryChartRef" class="chart-container" />
+    </div>
+
+    <div class="report-section card">
+      <h3 class="chart-title">详细报表</h3>
+      <div class="report-grid">
+        <div
+          v-for="link in reportLinks"
+          :key="link.path"
+          class="report-item"
+          @click="router.push(link.path)"
+        >
+          <span class="report-icon">{{ link.icon }}</span>
+          <span class="report-label">{{ link.label }}</span>
+          <van-icon name="arrow" class="report-arrow" />
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -191,6 +218,42 @@ function renderCategoryChart() {
   .chart-container {
     width: 100%;
     height: 260px;
+  }
+}
+
+.report-section {
+  .chart-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  .report-grid {
+    .report-item {
+      display: flex;
+      align-items: center;
+      padding: 14px 0;
+      border-bottom: 0.5px solid var(--color-divider);
+      cursor: pointer;
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      .report-icon {
+        font-size: 20px;
+        margin-right: 12px;
+      }
+
+      .report-label {
+        flex: 1;
+        font-size: 15px;
+      }
+
+      .report-arrow {
+        color: var(--color-text-tertiary);
+      }
+    }
   }
 }
 </style>

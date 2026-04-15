@@ -24,19 +24,45 @@ public interface StatsMapper {
 
     @Select("""
             SELECT
+                COALESCE(SUM(amount), 0) AS totalExpense,
+                COALESCE(SUM(CASE WHEN reimburse_status = 2 THEN amount ELSE 0 END), 0) AS totalReimbursed,
+                COALESCE(SUM(CASE WHEN reimburse_status = 0 OR reimburse_status = 1 THEN amount ELSE 0 END), 0) AS totalPending,
+                COUNT(DISTINCT trip_id) AS tripCount,
+                COUNT(CASE WHEN invoice_no IS NOT NULL AND invoice_no != '' THEN 1 END) AS invoiceCount
+            FROM t_expense
+            WHERE user_id = #{userId} AND status = 0
+                AND YEAR(expense_date) = #{year}
+            """)
+    StatsOverviewVO selectOverviewByYear(@Param("userId") Long userId, @Param("year") Integer year);
+
+    @Select("""
+            SELECT
                 COALESCE(SUM(DATEDIFF(
                     COALESCE(t.end_date, t.start_date),
                     t.start_date
                 ) + 1), 0) AS totalTripDays
-            FROM t_trip t
+            FROM t_business_trip t
             WHERE t.user_id = #{userId} AND t.status = 0
             """)
     Integer selectTotalTripDays(@Param("userId") Long userId);
 
     @Select("""
             SELECT
+                COALESCE(SUM(DATEDIFF(
+                    COALESCE(t.end_date, t.start_date),
+                    t.start_date
+                ) + 1), 0) AS totalTripDays
+            FROM t_business_trip t
+            WHERE t.user_id = #{userId} AND t.status = 0
+                AND YEAR(t.start_date) = #{year}
+            """)
+    Integer selectTotalTripDaysByYear(@Param("userId") Long userId, @Param("year") Integer year);
+
+    @Select("""
+            SELECT
                 DATE_FORMAT(expense_date, '%Y-%m') AS month,
-                COALESCE(SUM(amount), 0) AS amount
+                COALESCE(SUM(amount), 0) AS amount,
+                COALESCE(SUM(CASE WHEN reimburse_status = 2 THEN amount ELSE 0 END), 0) AS reimbursed
             FROM t_expense
             WHERE user_id = #{userId} AND status = 0
                 AND YEAR(expense_date) = #{year}
@@ -51,7 +77,7 @@ public interface StatsMapper {
                 COALESCE(c.name, e.invoice_type, '其他') AS categoryName,
                 COALESCE(SUM(e.amount), 0) AS amount
             FROM t_expense e
-            LEFT JOIN t_category c ON e.category_id = c.id
+            LEFT JOIN t_expense_category c ON e.category_id = c.id
             WHERE e.user_id = #{userId} AND e.status = 0
                 AND e.expense_date >= #{startDate}
                 AND e.expense_date <= #{endDate}
@@ -70,7 +96,7 @@ public interface StatsMapper {
                     start_date
                 ) + 1), 0) AS totalDays,
                 COALESCE(SUM(subsidy), 0) AS totalSubsidy
-            FROM t_trip
+            FROM t_business_trip
             WHERE user_id = #{userId} AND status = 0
                 AND YEAR(start_date) = #{year}
             """)
@@ -78,16 +104,17 @@ public interface StatsMapper {
 
     @Select("""
             SELECT
-                city,
+                destination AS city,
                 COUNT(*) AS count,
                 COALESCE(SUM(subsidy), 0) AS amount
-            FROM t_trip
+            FROM t_business_trip
             WHERE user_id = #{userId} AND status = 0
-                AND city IS NOT NULL AND city != ''
-            GROUP BY city
+                AND destination IS NOT NULL AND destination != ''
+                AND YEAR(start_date) = #{year}
+            GROUP BY destination
             ORDER BY count DESC
             """)
-    List<CityStats> selectCityRanking(@Param("userId") Long userId);
+    List<CityStats> selectCityRanking(@Param("userId") Long userId, @Param("year") Integer year);
 
     @Select("""
             SELECT
@@ -140,6 +167,30 @@ public interface StatsMapper {
 
     @Select("""
             SELECT
+                e.expense_date AS expenseDate,
+                COALESCE(ec.name, e.invoice_type, '其他') AS categoryName,
+                e.amount,
+                e.tax_amount AS taxAmount,
+                e.invoice_no AS invoiceNo,
+                e.invoice_type AS invoiceType,
+                e.seller_name AS sellerName,
+                e.description,
+                e.reimburse_status AS reimburseStatus
+            FROM t_expense e
+            LEFT JOIN t_expense_category ec ON e.category_id = ec.id
+            WHERE e.user_id = #{userId} AND e.status = 0
+                AND e.expense_date >= #{startDate}
+                AND e.expense_date <= #{endDate}
+                AND e.category_id = #{categoryId}
+            ORDER BY e.expense_date DESC
+            """)
+    List<java.util.Map<String, Object>> selectExpenseForExportWithCategory(@Param("userId") Long userId,
+                                                                           @Param("startDate") String startDate,
+                                                                           @Param("endDate") String endDate,
+                                                                           @Param("categoryId") Long categoryId);
+
+    @Select("""
+            SELECT
                 DATE_FORMAT(r.created_at, '%Y-%m') AS month,
                 COALESCE(SUM(r.total_amount), 0) AS submitted,
                 COALESCE(SUM(CASE WHEN r.reimburse_status = 2 THEN r.total_amount ELSE 0 END), 0) AS received,
@@ -151,4 +202,16 @@ public interface StatsMapper {
             ORDER BY month
             """)
     List<ReimburseProgressVO> selectReimburseProgress(@Param("userId") Long userId, @Param("year") Integer year);
+
+    @Select("""
+            SELECT DATE(expense_date) AS date,
+                   COALESCE(SUM(amount), 0) AS amount,
+                   COUNT(*) AS count
+            FROM t_expense
+            WHERE user_id = #{userId} AND status = 0
+                AND YEAR(expense_date) = #{year} AND MONTH(expense_date) = #{month}
+            GROUP BY DATE(expense_date)
+            ORDER BY date
+            """)
+    List<CalendarDayVO> selectExpenseCalendar(@Param("userId") Long userId, @Param("year") int year, @Param("month") int month);
 }

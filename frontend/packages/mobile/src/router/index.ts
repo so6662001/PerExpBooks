@@ -99,6 +99,26 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/stats/trip.vue'),
   },
   {
+    path: '/stats/progress',
+    name: 'StatsProgress',
+    component: () => import('@/views/stats/progress.vue'),
+  },
+  {
+    path: '/stats/yearly',
+    name: 'StatsYearly',
+    component: () => import('@/views/stats/yearly.vue'),
+  },
+  {
+    path: '/stats/city',
+    name: 'StatsCity',
+    component: () => import('@/views/stats/city.vue'),
+  },
+  {
+    path: '/stats/calendar',
+    name: 'StatsCalendar',
+    component: () => import('@/views/stats/calendar.vue'),
+  },
+  {
     path: '/member',
     name: 'MemberCenter',
     component: () => import('@/views/member/center.vue'),

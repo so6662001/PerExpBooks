@@ -2,15 +2,15 @@
 import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { getMonthlyTrend, formatAmount } from '@qianku/shared'
-import type { MonthlyTrendVO } from '@qianku/shared'
+import { getYearlyCompare, formatAmount } from '@qianku/shared'
+import type { YearlyCompareVO } from '@qianku/shared'
 import * as echarts from 'echarts'
 
-defineOptions({ name: 'StatsMonthly' })
+defineOptions({ name: 'StatsYearly' })
 
 const router = useRouter()
 const loading = ref(true)
-const trendData = ref<MonthlyTrendVO[]>([])
+const compareData = ref<YearlyCompareVO[]>([])
 const chartRef = ref<HTMLElement>()
 let chart: echarts.ECharts | null = null
 
@@ -37,7 +37,7 @@ watch(year, () => {
 async function loadData() {
   loading.value = true
   try {
-    trendData.value = await getMonthlyTrend({ year: year.value })
+    compareData.value = await getYearlyCompare({ year: year.value })
     await nextTick()
     renderChart()
   } catch (e: any) {
@@ -48,7 +48,7 @@ async function loadData() {
 }
 
 function renderChart() {
-  if (!chartRef.value || trendData.value.length === 0) return
+  if (!chartRef.value || compareData.value.length === 0) return
   if (chart) chart.dispose()
   chart = echarts.init(chartRef.value)
   chart.setOption({
@@ -56,18 +56,18 @@ function renderChart() {
       trigger: 'axis',
       formatter: (params: any) => {
         const lines = params.map((p: any) => `${p.seriesName}: ¥${p.value.toFixed(2)}`)
-        return `${params[0].name}<br/>${lines.join('<br/>')}`
+        return `${params[0].name}月<br/>${lines.join('<br/>')}`
       },
     },
     legend: {
-      data: ['支出', '报销'],
+      data: [`${year.value}年`, `${year.value - 1}年`],
       bottom: 0,
       textStyle: { fontSize: 12 },
     },
     grid: { left: 50, right: 20, top: 20, bottom: 40 },
     xAxis: {
       type: 'category',
-      data: trendData.value.map(d => d.month),
+      data: compareData.value.map(d => `${d.month}月`),
       axisLabel: { fontSize: 11 },
     },
     yAxis: {
@@ -79,32 +79,20 @@ function renderChart() {
     },
     series: [
       {
-        name: '支出',
+        name: `${year.value}年`,
         type: 'line',
-        data: trendData.value.map(d => d.amount),
+        data: compareData.value.map(d => d.currentYear),
         smooth: true,
         lineStyle: { color: '#007AFF', width: 2.5 },
         itemStyle: { color: '#007AFF' },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(0,122,255,0.15)' },
-            { offset: 1, color: 'rgba(0,122,255,0.01)' },
-          ]),
-        },
       },
       {
-        name: '报销',
+        name: `${year.value - 1}年`,
         type: 'line',
-        data: trendData.value.map(d => d.reimbursed),
+        data: compareData.value.map(d => d.lastYear),
         smooth: true,
-        lineStyle: { color: '#34C759', width: 2.5 },
-        itemStyle: { color: '#34C759' },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(52,199,89,0.15)' },
-            { offset: 1, color: 'rgba(52,199,89,0.01)' },
-          ]),
-        },
+        lineStyle: { color: '#FF9500', width: 2.5, type: 'dashed' },
+        itemStyle: { color: '#FF9500' },
       },
     ],
   })
@@ -118,7 +106,7 @@ function onYearConfirm({ selectedOptions }: any) {
 
 <template>
   <div class="page">
-    <van-nav-bar title="月度趋势" left-arrow @click-left="router.back()" />
+    <van-nav-bar title="年度对比" left-arrow @click-left="router.back()" />
 
     <div class="year-selector card">
       <van-field
@@ -134,25 +122,22 @@ function onYearConfirm({ selectedOptions }: any) {
 
     <template v-if="!loading">
       <div class="chart-section card">
-        <h3 class="chart-title">月度费用趋势</h3>
+        <h3 class="chart-title">{{ year }}年 vs {{ year - 1 }}年</h3>
         <div ref="chartRef" class="chart-container" />
       </div>
 
       <div class="data-section">
-        <div class="section-title">月度数据</div>
+        <div class="section-title">月度对比数据</div>
         <div class="data-table card">
           <div class="table-header">
-            <span class="col-month">月份</span>
-            <span class="col-expense">支出</span>
-            <span class="col-reimbursed">报销</span>
+            <span class="col">月份</span>
+            <span class="col">{{ year }}年</span>
+            <span class="col">{{ year - 1 }}年</span>
           </div>
-          <div v-for="item in trendData" :key="item.month" class="table-row">
-            <span class="col-month">{{ item.month }}</span>
-            <span class="col-expense">{{ formatAmount(item.amount) }}</span>
-            <span class="col-reimbursed">{{ formatAmount(item.reimbursed) }}</span>
-          </div>
-          <div v-if="trendData.length === 0" class="table-empty">
-            暂无数据
+          <div v-for="item in compareData" :key="item.month" class="table-row">
+            <span class="col">{{ item.month }}月</span>
+            <span class="col current">{{ formatAmount(item.currentYear) }}</span>
+            <span class="col last">{{ formatAmount(item.lastYear) }}</span>
           </div>
         </div>
       </div>
@@ -208,20 +193,12 @@ function onYearConfirm({ selectedOptions }: any) {
 
     .table-row {
       font-size: 14px;
-
       &:last-child { border-bottom: none; }
     }
 
-    .col-month { flex: 1; }
-    .col-expense { flex: 1; text-align: right; color: #007AFF; }
-    .col-reimbursed { flex: 1; text-align: right; color: #34C759; }
-
-    .table-empty {
-      text-align: center;
-      padding: 24px;
-      color: var(--color-text-tertiary);
-      font-size: 14px;
-    }
+    .col { flex: 1; text-align: center; }
+    .current { color: #007AFF; }
+    .last { color: #FF9500; }
   }
 }
 </style>

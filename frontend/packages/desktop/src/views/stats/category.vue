@@ -35,22 +35,17 @@
       </template>
       <el-table :data="categoryData" stripe>
         <el-table-column type="index" width="60" label="排名" />
-        <el-table-column prop="category" label="分类名" width="150">
-          <template #default="{ row }">
-            {{ getCategoryIcon(row.category) }} {{ getCategoryLabel(row.category) }}
-          </template>
-        </el-table-column>
+        <el-table-column prop="categoryName" label="分类名" width="150" />
         <el-table-column prop="amount" label="金额" width="150" align="right" sortable>
           <template #default="{ row }">
             <span class="amount">{{ formatAmount(row.amount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="percentage" label="占比" width="200">
+        <el-table-column prop="ratio" label="占比" width="200">
           <template #default="{ row }">
-            <el-progress :percentage="row.percentage" :color="'#007AFF'" />
+            <el-progress :percentage="row.ratio" :color="'#007AFF'" />
           </template>
         </el-table-column>
-        <el-table-column prop="count" label="笔数" width="100" align="center" />
       </el-table>
     </el-card>
   </div>
@@ -60,15 +55,13 @@
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import {
-  getCategoryStats,
+  getCategoryRatio,
   formatAmount,
-  getCategoryLabel,
-  getCategoryIcon,
-  type CategoryStatsVO,
+  type CategoryRatioVO,
 } from '@qianku/shared'
 
 const dateRange = ref<[string, string] | null>(null)
-const categoryData = ref<CategoryStatsVO[]>([])
+const categoryData = ref<CategoryRatioVO[]>([])
 const pieChartRef = ref<HTMLElement>()
 const barChartRef = ref<HTMLElement>()
 let pieChart: echarts.ECharts | null = null
@@ -83,7 +76,7 @@ async function loadData() {
     params.endDate = dateRange.value[1]
   }
   try {
-    categoryData.value = await getCategoryStats(params)
+    categoryData.value = await getCategoryRatio(params)
   } catch {
     categoryData.value = []
   }
@@ -105,7 +98,7 @@ function renderPieChart() {
       center: ['50%', '45%'],
       label: { formatter: '{b}\n{d}%' },
       data: categoryData.value.map((c, i) => ({
-        name: getCategoryLabel(c.category),
+        name: c.categoryName,
         value: c.amount,
         itemStyle: { color: colors[i % colors.length] },
       })),
@@ -117,7 +110,7 @@ function renderBarChart() {
   if (!barChartRef.value) return
   if (!barChart) barChart = echarts.init(barChartRef.value)
 
-  const labels = categoryData.value.map(c => getCategoryLabel(c.category))
+  const labels = categoryData.value.map(c => c.categoryName)
   barChart.setOption({
     tooltip: { trigger: 'axis', formatter: (params: any) => `${params[0].name}: ¥${params[0].value.toFixed(2)}` },
     grid: { left: 80, right: 20, top: 20, bottom: 40 },

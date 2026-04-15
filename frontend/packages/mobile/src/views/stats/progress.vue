@@ -2,15 +2,15 @@
 import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { getMonthlyTrend, formatAmount } from '@qianku/shared'
-import type { MonthlyTrendVO } from '@qianku/shared'
+import { getReimburseProgress, formatAmount } from '@qianku/shared'
+import type { ReimburseProgressVO } from '@qianku/shared'
 import * as echarts from 'echarts'
 
-defineOptions({ name: 'StatsMonthly' })
+defineOptions({ name: 'StatsProgress' })
 
 const router = useRouter()
 const loading = ref(true)
-const trendData = ref<MonthlyTrendVO[]>([])
+const progressData = ref<ReimburseProgressVO[]>([])
 const chartRef = ref<HTMLElement>()
 let chart: echarts.ECharts | null = null
 
@@ -37,7 +37,7 @@ watch(year, () => {
 async function loadData() {
   loading.value = true
   try {
-    trendData.value = await getMonthlyTrend({ year: year.value })
+    progressData.value = await getReimburseProgress({ year: year.value })
     await nextTick()
     renderChart()
   } catch (e: any) {
@@ -48,7 +48,7 @@ async function loadData() {
 }
 
 function renderChart() {
-  if (!chartRef.value || trendData.value.length === 0) return
+  if (!chartRef.value || progressData.value.length === 0) return
   if (chart) chart.dispose()
   chart = echarts.init(chartRef.value)
   chart.setOption({
@@ -60,14 +60,14 @@ function renderChart() {
       },
     },
     legend: {
-      data: ['支出', '报销'],
+      data: ['已报销', '待报销', '已提交'],
       bottom: 0,
       textStyle: { fontSize: 12 },
     },
-    grid: { left: 50, right: 20, top: 20, bottom: 40 },
+    grid: { left: 50, right: 20, top: 20, bottom: 50 },
     xAxis: {
       type: 'category',
-      data: trendData.value.map(d => d.month),
+      data: progressData.value.map(d => d.month),
       axisLabel: { fontSize: 11 },
     },
     yAxis: {
@@ -79,32 +79,25 @@ function renderChart() {
     },
     series: [
       {
-        name: '支出',
-        type: 'line',
-        data: trendData.value.map(d => d.amount),
-        smooth: true,
-        lineStyle: { color: '#007AFF', width: 2.5 },
-        itemStyle: { color: '#007AFF' },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(0,122,255,0.15)' },
-            { offset: 1, color: 'rgba(0,122,255,0.01)' },
-          ]),
-        },
+        name: '已报销',
+        type: 'bar',
+        stack: 'total',
+        data: progressData.value.map(d => d.received),
+        itemStyle: { color: '#34C759' },
       },
       {
-        name: '报销',
-        type: 'line',
-        data: trendData.value.map(d => d.reimbursed),
-        smooth: true,
-        lineStyle: { color: '#34C759', width: 2.5 },
-        itemStyle: { color: '#34C759' },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(52,199,89,0.15)' },
-            { offset: 1, color: 'rgba(52,199,89,0.01)' },
-          ]),
-        },
+        name: '待报销',
+        type: 'bar',
+        stack: 'total',
+        data: progressData.value.map(d => d.pending),
+        itemStyle: { color: '#C7C7CC' },
+      },
+      {
+        name: '已提交',
+        type: 'bar',
+        stack: 'total',
+        data: progressData.value.map(d => d.submitted),
+        itemStyle: { color: '#FF9500' },
       },
     ],
   })
@@ -118,7 +111,7 @@ function onYearConfirm({ selectedOptions }: any) {
 
 <template>
   <div class="page">
-    <van-nav-bar title="月度趋势" left-arrow @click-left="router.back()" />
+    <van-nav-bar title="报销进度" left-arrow @click-left="router.back()" />
 
     <div class="year-selector card">
       <van-field
@@ -134,26 +127,26 @@ function onYearConfirm({ selectedOptions }: any) {
 
     <template v-if="!loading">
       <div class="chart-section card">
-        <h3 class="chart-title">月度费用趋势</h3>
+        <h3 class="chart-title">月度报销进度</h3>
         <div ref="chartRef" class="chart-container" />
       </div>
 
       <div class="data-section">
-        <div class="section-title">月度数据</div>
+        <div class="section-title">报销明细</div>
         <div class="data-table card">
           <div class="table-header">
-            <span class="col-month">月份</span>
-            <span class="col-expense">支出</span>
-            <span class="col-reimbursed">报销</span>
+            <span class="col">月份</span>
+            <span class="col">已提交</span>
+            <span class="col">已收款</span>
+            <span class="col">待处理</span>
           </div>
-          <div v-for="item in trendData" :key="item.month" class="table-row">
-            <span class="col-month">{{ item.month }}</span>
-            <span class="col-expense">{{ formatAmount(item.amount) }}</span>
-            <span class="col-reimbursed">{{ formatAmount(item.reimbursed) }}</span>
+          <div v-for="item in progressData" :key="item.month" class="table-row">
+            <span class="col">{{ item.month }}</span>
+            <span class="col submitted">{{ formatAmount(item.submitted) }}</span>
+            <span class="col received">{{ formatAmount(item.received) }}</span>
+            <span class="col pending">{{ formatAmount(item.pending) }}</span>
           </div>
-          <div v-if="trendData.length === 0" class="table-empty">
-            暂无数据
-          </div>
+          <div v-if="progressData.length === 0" class="table-empty">暂无数据</div>
         </div>
       </div>
     </template>
@@ -207,14 +200,14 @@ function onYearConfirm({ selectedOptions }: any) {
     }
 
     .table-row {
-      font-size: 14px;
-
+      font-size: 13px;
       &:last-child { border-bottom: none; }
     }
 
-    .col-month { flex: 1; }
-    .col-expense { flex: 1; text-align: right; color: #007AFF; }
-    .col-reimbursed { flex: 1; text-align: right; color: #34C759; }
+    .col { flex: 1; text-align: center; }
+    .submitted { color: #FF9500; }
+    .received { color: #34C759; }
+    .pending { color: #C7C7CC; }
 
     .table-empty {
       text-align: center;

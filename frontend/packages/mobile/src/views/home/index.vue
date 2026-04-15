@@ -13,9 +13,9 @@ const userStore = useUserStore()
 const loading = ref(false)
 const stats = ref<StatsOverviewVO>({
   totalExpense: 0,
-  reimbursedAmount: 0,
-  pendingAmount: 0,
-  tripDays: 0,
+  totalReimbursed: 0,
+  totalPending: 0,
+  totalTripDays: 0,
   tripCount: 0,
   invoiceCount: 0,
 })
@@ -76,13 +76,13 @@ function goStats() {
         <div class="overview-card small">
           <div class="card-label">已报销</div>
           <div class="card-amount" style="color: var(--color-success)">
-            {{ formatAmount(stats.reimbursedAmount) }}
+            {{ formatAmount(stats.totalReimbursed) }}
           </div>
         </div>
         <div class="overview-card small">
           <div class="card-label">待报销</div>
           <div class="card-amount" style="color: var(--color-warning)">
-            {{ formatAmount(stats.pendingAmount) }}
+            {{ formatAmount(stats.totalPending) }}
           </div>
         </div>
       </div>

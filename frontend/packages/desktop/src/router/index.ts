@@ -118,6 +118,12 @@ const routes: RouteRecordRaw[] = [
             component: () => import('@/views/stats/city.vue'),
             meta: { title: '城市排行' },
           },
+          {
+            path: 'calendar',
+            name: 'StatsCalendar',
+            component: () => import('@/views/stats/calendar.vue'),
+            meta: { title: '费用日历' },
+          },
         ],
       },
       {

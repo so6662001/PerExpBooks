@@ -2,14 +2,13 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { listTrips, formatAmount, formatDate } from '@qianku/shared'
-import type { TripVO } from '@qianku/shared'
+import { getTripSummary, formatAmount } from '@qianku/shared'
+import type { TripSummaryVO } from '@qianku/shared'
 
 defineOptions({ name: 'StatsTrip' })
 
 const router = useRouter()
 const loading = ref(true)
-const trips = ref<TripVO[]>([])
 
 const currentYear = new Date().getFullYear()
 const year = ref(currentYear)
@@ -19,9 +18,12 @@ const yearColumns = Array.from({ length: 5 }, (_, i) => ({
   value: currentYear - i,
 }))
 
-const totalTrips = ref(0)
-const totalDays = ref(0)
-const totalExpense = ref(0)
+const summary = ref<TripSummaryVO>({
+  tripCount: 0,
+  totalDays: 0,
+  totalSubsidy: 0,
+  cityDistribution: [],
+})
 
 onMounted(() => {
   loadData()
@@ -34,15 +36,7 @@ watch(year, () => {
 async function loadData() {
   loading.value = true
   try {
-    const startDate = `${year.value}-01-01`
-    const endDate = `${year.value}-12-31`
-    const result = await listTrips()
-    const allTrips = Array.isArray(result) ? result : (result as any).list || []
-    trips.value = allTrips
-
-    totalTrips.value = trips.value.length
-    totalDays.value = trips.value.reduce((sum: number, t: any) => sum + (t.days || 0), 0)
-    totalExpense.value = trips.value.reduce((sum: number, t: any) => sum + (t.subsidyTotal || 0), 0)
+    summary.value = await getTripSummary({ year: year.value })
   } catch (e: any) {
     showToast(e.message || '加载失败')
   } finally {
@@ -76,40 +70,33 @@ function onYearConfirm({ selectedOptions }: any) {
       <div class="summary-grid">
         <div class="summary-card card">
           <div class="summary-icon">✈️</div>
-          <div class="summary-value">{{ totalTrips }}</div>
+          <div class="summary-value">{{ summary.tripCount }}</div>
           <div class="summary-label">出差次数</div>
         </div>
         <div class="summary-card card">
           <div class="summary-icon">📅</div>
-          <div class="summary-value">{{ totalDays }}</div>
+          <div class="summary-value">{{ summary.totalDays }}</div>
           <div class="summary-label">总天数</div>
         </div>
         <div class="summary-card card">
           <div class="summary-icon">💰</div>
-          <div class="summary-value">{{ formatAmount(totalExpense) }}</div>
-          <div class="summary-label">总支出</div>
+          <div class="summary-value">{{ formatAmount(summary.totalSubsidy) }}</div>
+          <div class="summary-label">总补贴</div>
         </div>
       </div>
 
-      <div class="section-title">出差记录汇总</div>
+      <div class="section-title">城市分布</div>
 
-      <div v-for="trip in trips" :key="trip.id" class="trip-item card">
-        <div class="trip-header">
-          <span class="trip-dest">📍 {{ trip.destination }}</span>
-          <span class="status-tag">
-            {{ trip.title }}
-          </span>
+      <div v-for="(city, index) in summary.cityDistribution" :key="city.city" class="city-item card">
+        <div class="city-rank">{{ index + 1 }}</div>
+        <div class="city-info">
+          <div class="city-name">📍 {{ city.city }}</div>
+          <div class="city-count">{{ city.count }} 次出差</div>
         </div>
-        <div class="trip-dates">
-          {{ formatDate(trip.startDate) }} ~ {{ formatDate(trip.endDate) }} · {{ trip.days }}天
-        </div>
-        <div class="trip-footer">
-          <span class="trip-expense">补贴 {{ formatAmount(trip.subsidyTotal) }}</span>
-          <span class="trip-count">{{ trip.expenseCount }} 笔费用</span>
-        </div>
+        <div class="city-amount">{{ formatAmount(city.amount) }}</div>
       </div>
 
-      <div v-if="trips.length === 0" class="empty-state">
+      <div v-if="summary.cityDistribution.length === 0" class="empty-state">
         <div class="empty-icon">✈️</div>
         <div class="empty-text">{{ year }}年暂无出差记录</div>
       </div>
@@ -166,43 +153,46 @@ function onYearConfirm({ selectedOptions }: any) {
   }
 }
 
-.trip-item {
+.city-item {
+  display: flex;
+  align-items: center;
   margin: 0 16px 8px;
-  padding: 16px;
+  padding: 14px 16px;
 
-  .trip-header {
+  .city-rank {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    color: #fff;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-
-    .trip-dest {
-      font-size: 16px;
-      font-weight: 600;
-    }
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    margin-right: 12px;
+    flex-shrink: 0;
   }
 
-  .trip-dates {
-    font-size: 13px;
-    color: var(--color-text-secondary);
-    margin-top: 6px;
-  }
+  .city-info {
+    flex: 1;
 
-  .trip-footer {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 0.5px solid var(--color-divider);
-    font-size: 13px;
-
-    .trip-expense {
+    .city-name {
+      font-size: 15px;
       font-weight: 500;
-      color: var(--color-primary);
     }
 
-    .trip-count {
+    .city-count {
+      font-size: 12px;
       color: var(--color-text-secondary);
+      margin-top: 2px;
     }
+  }
+
+  .city-amount {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-primary);
   }
 }
 </style>

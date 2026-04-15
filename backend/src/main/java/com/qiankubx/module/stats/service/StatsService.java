@@ -25,8 +25,18 @@ public class StatsService {
 
     private final StatsMapper statsMapper;
 
-    public StatsOverviewVO getOverview(Long userId) {
-        StatsOverviewVO overview = statsMapper.selectOverview(userId);
+    public StatsOverviewVO getOverview(Long userId, Integer year) {
+        StatsOverviewVO overview;
+        Integer totalTripDays;
+
+        if (year != null) {
+            overview = statsMapper.selectOverviewByYear(userId, year);
+            totalTripDays = statsMapper.selectTotalTripDaysByYear(userId, year);
+        } else {
+            overview = statsMapper.selectOverview(userId);
+            totalTripDays = statsMapper.selectTotalTripDays(userId);
+        }
+
         if (overview == null) {
             overview = new StatsOverviewVO();
             overview.setTotalExpense(BigDecimal.ZERO);
@@ -38,7 +48,6 @@ public class StatsService {
             return overview;
         }
 
-        Integer totalTripDays = statsMapper.selectTotalTripDays(userId);
         overview.setTotalTripDays(totalTripDays != null ? totalTripDays : 0);
 
         return overview;
@@ -90,7 +99,7 @@ public class StatsService {
             summary.setTotalSubsidy(BigDecimal.ZERO);
         }
 
-        List<CityStats> cityRanking = statsMapper.selectCityRanking(userId);
+        List<CityStats> cityRanking = statsMapper.selectCityRanking(userId, year);
         summary.setCityDistribution(cityRanking);
 
         return summary;
@@ -139,7 +148,11 @@ public class StatsService {
         return statsMapper.selectCityExpenseRanking(userId, year);
     }
 
-    public void exportExcel(Long userId, String startDate, String endDate, HttpServletResponse response) {
+    public List<CalendarDayVO> getExpenseCalendar(Long userId, int year, int month) {
+        return statsMapper.selectExpenseCalendar(userId, year, month);
+    }
+
+    public void exportExcel(Long userId, String startDate, String endDate, Long categoryId, HttpServletResponse response) {
         if (startDate == null || startDate.isBlank()) {
             startDate = LocalDate.now().withDayOfYear(1).toString();
         }
@@ -147,7 +160,13 @@ public class StatsService {
             endDate = LocalDate.now().toString();
         }
 
-        List<Map<String, Object>> rows = statsMapper.selectExpenseForExport(userId, startDate, endDate);
+        List<Map<String, Object>> rows;
+        if (categoryId != null) {
+            rows = statsMapper.selectExpenseForExportWithCategory(userId, startDate, endDate, categoryId);
+        } else {
+            rows = statsMapper.selectExpenseForExport(userId, startDate, endDate);
+        }
+
         List<ExpenseExcelVO> excelData = new ArrayList<>();
         for (Map<String, Object> row : rows) {
             ExpenseExcelVO vo = new ExpenseExcelVO();

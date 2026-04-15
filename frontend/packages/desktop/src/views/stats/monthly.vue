@@ -17,16 +17,16 @@
       </template>
       <el-table :data="monthlyData" stripe show-summary :summary-method="getSummary">
         <el-table-column prop="month" label="月份" width="120" />
-        <el-table-column prop="expense" label="支出" align="right">
-          <template #default="{ row }">{{ formatAmount(row.expense) }}</template>
+        <el-table-column prop="amount" label="支出" align="right">
+          <template #default="{ row }">{{ formatAmount(row.amount) }}</template>
         </el-table-column>
         <el-table-column prop="reimbursed" label="已报销" align="right">
           <template #default="{ row }">{{ formatAmount(row.reimbursed) }}</template>
         </el-table-column>
         <el-table-column label="差额" align="right">
           <template #default="{ row }">
-            <span :class="{ negative: row.expense - row.reimbursed > 0 }">
-              {{ formatAmount(row.expense - row.reimbursed) }}
+            <span :class="{ negative: row.amount - row.reimbursed > 0 }">
+              {{ formatAmount(row.amount - row.reimbursed) }}
             </span>
           </template>
         </el-table-column>
@@ -88,7 +88,7 @@ function renderChart() {
         name: '支出',
         type: 'line',
         smooth: true,
-        data: monthlyData.value.map(m => m.expense),
+        data: monthlyData.value.map(m => m.amount),
         itemStyle: { color: '#007AFF' },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -122,11 +122,11 @@ function getSummary({ columns, data }: any) {
       return
     }
     const prop = col.property
-    if (prop === 'expense' || prop === 'reimbursed') {
+    if (prop === 'amount' || prop === 'reimbursed') {
       const total = data.reduce((s: number, r: any) => s + (r[prop] || 0), 0)
       sums[index] = formatAmount(total)
     } else if (index === 3) {
-      const diff = data.reduce((s: number, r: any) => s + (r.expense - r.reimbursed), 0)
+      const diff = data.reduce((s: number, r: any) => s + (r.amount - r.reimbursed), 0)
       sums[index] = formatAmount(diff)
     } else {
       sums[index] = ''
